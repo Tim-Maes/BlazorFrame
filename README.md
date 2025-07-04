@@ -121,22 +121,6 @@ The component automatically derives allowed origins from the `Src` URL for secur
 }
 ```
 
-### Legacy Message Handling (Backward Compatible)
-
-```razor
-<BlazorFrame Src="@iframeUrl"
-            OnMessage="HandleIframeMessage" />
-
-@code {
-    private Task HandleIframeMessage(string messageJson)
-    {
-        // This still works - messages are pre-validated for security
-        var message = JsonSerializer.Deserialize<dynamic>(messageJson);
-        return Task.CompletedTask;
-    }
-}
-```
-
 ## Parameters
 
 | Parameter | Type | Default | Description |

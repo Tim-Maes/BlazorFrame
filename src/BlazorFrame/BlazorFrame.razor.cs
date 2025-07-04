@@ -1,15 +1,21 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Microsoft.Extensions.Logging;
+using BlazorFrame.Models;
+using BlazorFrame.Services;
 
 namespace BlazorFrame;
 
-public partial class BlazorFrame
+public partial class BlazorFrame : IAsyncDisposable
 {
     private ElementReference iframeElement;
     private IJSObjectReference? module;
     private DotNetObjectReference<BlazorFrame>? objRef;
+    private readonly MessageValidationService validationService = new();
+    private List<string> computedAllowedOrigins = new();
 
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+    [Inject] private ILogger<BlazorFrame>? Logger { get; set; }
 
     [Parameter] public string Src { get; set; } = string.Empty;
     [Parameter] public string Width { get; set; } = "100%";
@@ -17,8 +23,29 @@ public partial class BlazorFrame
     [Parameter] public bool EnableAutoResize { get; set; } = true;
     [Parameter] public bool EnableScroll { get; set; } = false;
 
+    /// <summary>
+    /// List of allowed origins for postMessage communication.
+    /// If not specified, will auto-derive from the Src URL.
+    /// </summary>
+    [Parameter] public List<string>? AllowedOrigins { get; set; }
+
+    /// <summary>
+    /// Security options for message validation
+    /// </summary>
+    [Parameter] public MessageSecurityOptions SecurityOptions { get; set; } = new();
+
     [Parameter] public EventCallback OnLoad { get; set; }
     [Parameter] public EventCallback<string> OnMessage { get; set; }
+
+    /// <summary>
+    /// Event fired when a message is received with full validation details
+    /// </summary>
+    [Parameter] public EventCallback<IframeMessage> OnValidatedMessage { get; set; }
+
+    /// <summary>
+    /// Event fired when a security violation occurs
+    /// </summary>
+    [Parameter] public EventCallback<IframeMessage> OnSecurityViolation { get; set; }
 
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object> AdditionalAttributes { get; set; } = new();
@@ -28,25 +55,64 @@ public partial class BlazorFrame
         ? "iframe-wrapper scrollable"
         : "iframe-wrapper";
 
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        UpdateAllowedOrigins();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        
         module = await JSRuntime.InvokeAsync<IJSObjectReference>(
           "import",
           "./_content/BlazorFrame/blazorFrameInterop.js");
         objRef = DotNetObjectReference.Create(this);
+        
+        // Pass allowed origins to JavaScript for client-side validation
         await module.InvokeVoidAsync(
           "initialize",
           iframeElement,
           objRef,
-          EnableAutoResize);
+          EnableAutoResize,
+          computedAllowedOrigins.ToArray());
     }
 
-    private Task OnLoadHandler() => OnLoad.InvokeAsync(null);
+    private Task OnLoadHandler() => OnLoad.InvokeAsync();
 
     [JSInvokable]
-    public Task OnIframeMessage(string messageJson)
-      => OnMessage.InvokeAsync(messageJson);
+    public async Task OnIframeMessage(string origin, string messageJson)
+    {
+        var validatedMessage = validationService.ValidateMessage(
+            origin, 
+            messageJson, 
+            computedAllowedOrigins, 
+            SecurityOptions);
+
+        if (validatedMessage.IsValid)
+        {
+            // Fire both the legacy string-based event and new validated message event
+            await OnMessage.InvokeAsync(messageJson);
+            await OnValidatedMessage.InvokeAsync(validatedMessage);
+        }
+        else
+        {
+            // Handle security violation
+            if (SecurityOptions.LogSecurityViolations && Logger != null)
+            {
+                Logger.LogWarning(
+                    "BlazorFrame security violation: {Error}. Origin: {Origin}, Message: {Message}",
+                    validatedMessage.ValidationError,
+                    validatedMessage.Origin,
+                    validatedMessage.Data.Length > 100 
+                        ? validatedMessage.Data[..100] + "..." 
+                        : validatedMessage.Data);
+            }
+
+            await OnSecurityViolation.InvokeAsync(validatedMessage);
+        }
+    }
 
     [JSInvokable]
     public Task Resize(double h)
@@ -56,9 +122,36 @@ public partial class BlazorFrame
         return Task.CompletedTask;
     }
 
+    private void UpdateAllowedOrigins()
+    {
+        computedAllowedOrigins.Clear();
+
+        if (AllowedOrigins?.Count > 0)
+        {
+            // Use explicitly provided origins
+            computedAllowedOrigins.AddRange(AllowedOrigins);
+        }
+        else if (!string.IsNullOrEmpty(Src))
+        {
+            // Auto-derive from Src URL
+            var derivedOrigin = validationService.ExtractOrigin(Src);
+            if (!string.IsNullOrEmpty(derivedOrigin))
+            {
+                computedAllowedOrigins.Add(derivedOrigin);
+            }
+        }
+
+        // Remove duplicates and normalize
+        computedAllowedOrigins = computedAllowedOrigins
+            .Where(o => !string.IsNullOrEmpty(o))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if (module is not null) await module.DisposeAsync();
+        if (module is not null) 
+            await module.DisposeAsync();
         objRef?.Dispose();
     }
 }

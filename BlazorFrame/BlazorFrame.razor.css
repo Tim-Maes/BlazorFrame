@@ -1,0 +1,10 @@
+﻿.iframe-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+    .iframe-wrapper iframe {
+        display: block;
+        width: 100%;
+        border: none;
+    }

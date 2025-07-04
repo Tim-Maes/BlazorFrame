@@ -1,10 +1,13 @@
 ﻿.iframe-wrapper {
-    position: relative;
     width: 100%;
+    overflow: hidden;
 }
+
+    .iframe-wrapper.scrollable {
+        overflow: auto;
+    }
 
     .iframe-wrapper iframe {
         display: block;
-        width: 100%;
         border: none;
     }

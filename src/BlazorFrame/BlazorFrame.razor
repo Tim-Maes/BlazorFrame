@@ -1,6 +1,7 @@
-﻿<div class="iframe-wrapper" style="width:@Width;height:@Height">
+﻿<div class="@WrapperClasses">
     <iframe @ref="iframeElement"
             src="@Src"
+            style="width:@Width; height:@Height;"
             @attributes="AdditionalAttributes"
             @onload="OnLoadHandler">
     </iframe>

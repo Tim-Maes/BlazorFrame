@@ -70,7 +70,6 @@ public partial class BlazorFrame : IAsyncDisposable
           "./_content/BlazorFrame/blazorFrameInterop.js");
         objRef = DotNetObjectReference.Create(this);
         
-        // Pass allowed origins to JavaScript for client-side validation
         await module.InvokeVoidAsync(
           "initialize",
           iframeElement,
@@ -92,13 +91,11 @@ public partial class BlazorFrame : IAsyncDisposable
 
         if (validatedMessage.IsValid)
         {
-            // Fire both the legacy string-based event and new validated message event
             await OnMessage.InvokeAsync(messageJson);
             await OnValidatedMessage.InvokeAsync(validatedMessage);
         }
         else
         {
-            // Handle security violation
             if (SecurityOptions.LogSecurityViolations && Logger != null)
             {
                 Logger.LogWarning(
@@ -128,12 +125,10 @@ public partial class BlazorFrame : IAsyncDisposable
 
         if (AllowedOrigins?.Count > 0)
         {
-            // Use explicitly provided origins
             computedAllowedOrigins.AddRange(AllowedOrigins);
         }
         else if (!string.IsNullOrEmpty(Src))
         {
-            // Auto-derive from Src URL
             var derivedOrigin = validationService.ExtractOrigin(Src);
             if (!string.IsNullOrEmpty(derivedOrigin))
             {
@@ -141,7 +136,6 @@ public partial class BlazorFrame : IAsyncDisposable
             }
         }
 
-        // Remove duplicates and normalize
         computedAllowedOrigins = computedAllowedOrigins
             .Where(o => !string.IsNullOrEmpty(o))
             .Distinct(StringComparer.OrdinalIgnoreCase)

@@ -4,14 +4,14 @@ A Blazor component that provides an enhanced iframe wrapper with automatic resiz
 
 ## Features
 
-- ** Security-First Design** - Origin validation, message filtering, and comprehensive security options
-- ** Responsive** - Dynamically resizes iframe based on content height (can be enabled/disabled)
-- ** Cross-Frame Messaging** - Built-in support for postMessage communication with validation
-- ** Event Callbacks** - OnLoad, OnMessage, and security event handling
-- ** Flexible Styling** - Customizable width, height, and additional attributes
-- ** JavaScript Interop** - Seamless integration with Blazor's JS interop
-- ** Scrolling Control** - Enable or disable scrolling within the iframe wrapper
-- ** Disposal Pattern** - Proper cleanup of resources and event listeners
+- **Security-First Design** - Origin validation, message filtering, and comprehensive security options
+- **Responsive** - Dynamically resizes iframe based on content height (can be enabled/disabled)
+- **Cross-Frame Messaging** - Built-in support for postMessage communication with validation
+- **Event Callbacks** - OnLoad, OnMessage, and security event handling
+- **Flexible Styling** - Customizable width, height, and additional attributes
+- **JavaScript Interop** - Seamless integration with Blazor's JS interop
+- **Scrolling Control** - Enable or disable scrolling within the iframe wrapper
+- **Disposal Pattern** - Proper cleanup of resources and event listeners
 
 ## Installation
 

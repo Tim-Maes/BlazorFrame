@@ -7,7 +7,7 @@
 	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	  <PackageId>BlazorFrame</PackageId>
 	  <Version>1.2.2</Version>
-	  <Description>A secure Blazor iFrame component with built-in origin validation and message security.</Description>
+	  <Description>A enhanced secure Blazor iFrame component with built-in origin validation and message security.</Description>
 	  <PackageProjectUrl>https://www.github.com/Tim-Maes/BlazorFrame</PackageProjectUrl>
 	  <PackageReadmeFile>README.md</PackageReadmeFile>
 	  <RepositoryUrl>https://www.github.com/Tim-Maes/BlazorFrame</RepositoryUrl>

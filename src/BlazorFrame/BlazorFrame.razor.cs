@@ -97,7 +97,6 @@ public partial class BlazorFrame : IAsyncDisposable
         {
             Logger?.LogError(ex, "Failed to initialize BlazorFrame JavaScript module for {Src}", Src);
             
-            // Reset initialization flag to allow retry
             lock (initializationLock)
             {
                 isInitialized = false;
@@ -162,7 +161,7 @@ public partial class BlazorFrame : IAsyncDisposable
     {
         try
         {
-            if (h > 0 && h <= 50000) // Reasonable height limit
+            if (h > 0 && h <= 50000)
             {
                 Height = $"{h}px";
                 StateHasChanged();

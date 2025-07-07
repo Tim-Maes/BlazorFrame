@@ -1,6 +1,8 @@
 export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = []) {
     console.log('BlazorFrame: Initializing with origins:', allowedOrigins);
     
+    let cleanupFunctions = [];
+    
     function isOriginAllowed(origin) {
         if (!allowedOrigins || allowedOrigins.length === 0) {
             console.warn('BlazorFrame: No allowed origins specified');
@@ -54,16 +56,21 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
     }
 
     window.addEventListener('message', onMessage);
+    cleanupFunctions.push(() => window.removeEventListener('message', onMessage));
     console.log('BlazorFrame: Message listener added');
 
     if (enableResize) {
         console.log('BlazorFrame: Auto-resize enabled');
-        const resizeInterval = setInterval(() => {
+        
+        let resizeObserver;
+        let fallbackInterval;
+        let lastHeight = 0;
+        
+        function updateHeight() {
             try {
                 const doc = iframe.contentDocument || iframe.contentWindow?.document;
                 if (!doc) {
-                    clearInterval(resizeInterval);
-                    return;
+                    return false; // Signal that iframe is not accessible
                 }
 
                 const height = Math.max(
@@ -73,23 +80,55 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
                     doc.body?.offsetHeight || 0
                 );
 
-                if (height > 0) {
+                if (height > 0 && height !== lastHeight) {
                     iframe.style.height = height + 'px';
+                    lastHeight = height;
+                }
+                return true;
+            } catch (error) {
+                // Cross-origin access denied, stop trying
+                return false;
+            }
+        }
+
+        // Try to use ResizeObserver for better performance
+        if (window.ResizeObserver) {
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                if (doc && doc.body) {
+                    resizeObserver = new ResizeObserver(() => {
+                        updateHeight();
+                    });
+                    resizeObserver.observe(doc.body);
+                    resizeObserver.observe(doc.documentElement);
                 }
             } catch (error) {
-                clearInterval(resizeInterval);
+                // Fallback to polling if ResizeObserver fails
+                resizeObserver = null;
             }
-        }, 500);
+        }
 
-        return () => {
-            clearInterval(resizeInterval);
-            window.removeEventListener('message', onMessage);
-            console.log('BlazorFrame: Cleanup completed');
-        };
+        // Fallback to polling if ResizeObserver is not available or failed
+        if (!resizeObserver) {
+            fallbackInterval = setInterval(() => {
+                if (!updateHeight()) {
+                    clearInterval(fallbackInterval);
+                }
+            }, 500);
+        }
+
+        cleanupFunctions.push(() => {
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+            if (fallbackInterval) {
+                clearInterval(fallbackInterval);
+            }
+        });
     }
 
     return () => {
-        window.removeEventListener('message', onMessage);
+        cleanupFunctions.forEach(cleanup => cleanup());
         console.log('BlazorFrame: Cleanup completed');
     };
 }

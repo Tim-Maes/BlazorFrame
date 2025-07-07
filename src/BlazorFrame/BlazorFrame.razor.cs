@@ -12,6 +12,8 @@ public partial class BlazorFrame : IAsyncDisposable
     private DotNetObjectReference<BlazorFrame>? objRef;
     private readonly MessageValidationService validationService = new();
     private List<string> computedAllowedOrigins = new();
+    private bool isInitialized = false;
+    private readonly object initializationLock = new();
 
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
     [Inject] private ILogger<BlazorFrame>? Logger { get; set; }
@@ -46,6 +48,11 @@ public partial class BlazorFrame : IAsyncDisposable
     /// </summary>
     [Parameter] public EventCallback<IframeMessage> OnSecurityViolation { get; set; }
 
+    /// <summary>
+    /// Event fired when JavaScript initialization fails
+    /// </summary>
+    [Parameter] public EventCallback<Exception> OnInitializationError { get; set; }
+
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object> AdditionalAttributes { get; set; } = new();
 
@@ -62,7 +69,13 @@ public partial class BlazorFrame : IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (!firstRender || isInitialized) return;
+        
+        lock (initializationLock)
+        {
+            if (isInitialized) return;
+            isInitialized = true;
+        }
         
         try
         {
@@ -77,54 +90,93 @@ public partial class BlazorFrame : IAsyncDisposable
               objRef,
               EnableAutoResize,
               computedAllowedOrigins.ToArray());
+              
+            Logger?.LogDebug("BlazorFrame initialized successfully for {Src}", Src);
         }
         catch (Exception ex)
         {
-            if (Logger != null)
+            Logger?.LogError(ex, "Failed to initialize BlazorFrame JavaScript module for {Src}", Src);
+            
+            // Reset initialization flag to allow retry
+            lock (initializationLock)
             {
-                Logger.LogError(ex, "Failed to initialize BlazorFrame JavaScript module");
+                isInitialized = false;
             }
+            
+            await OnInitializationError.InvokeAsync(ex);
         }
     }
 
-    private Task OnLoadHandler() => OnLoad.InvokeAsync();
+    private async Task OnLoadHandler()
+    {
+        try
+        {
+            await OnLoad.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogWarning(ex, "Error in OnLoad callback for BlazorFrame");
+        }
+    }
 
     [JSInvokable]
     public async Task OnIframeMessage(string origin, string messageJson)
     {
-        var validatedMessage = validationService.ValidateMessage(
-            origin, 
-            messageJson, 
-            computedAllowedOrigins, 
-            SecurityOptions);
+        try
+        {
+            var validatedMessage = validationService.ValidateMessage(
+                origin, 
+                messageJson, 
+                computedAllowedOrigins, 
+                SecurityOptions);
 
-        if (validatedMessage.IsValid)
-        {
-            await OnMessage.InvokeAsync(messageJson);
-            await OnValidatedMessage.InvokeAsync(validatedMessage);
-        }
-        else
-        {
-            if (SecurityOptions.LogSecurityViolations && Logger != null)
+            if (validatedMessage.IsValid)
             {
-                Logger.LogWarning(
-                    "BlazorFrame security violation: {Error}. Origin: {Origin}, Message: {Message}",
-                    validatedMessage.ValidationError,
-                    validatedMessage.Origin,
-                    validatedMessage.Data.Length > 100 
-                        ? validatedMessage.Data[..100] + "..." 
-                        : validatedMessage.Data);
+                await OnMessage.InvokeAsync(messageJson);
+                await OnValidatedMessage.InvokeAsync(validatedMessage);
             }
+            else
+            {
+                if (SecurityOptions.LogSecurityViolations)
+                {
+                    Logger?.LogWarning(
+                        "BlazorFrame security violation: {Error}. Origin: {Origin}, Message: {Message}",
+                        validatedMessage.ValidationError,
+                        validatedMessage.Origin,
+                        validatedMessage.Data.Length > 100 
+                            ? validatedMessage.Data[..100] + "..." 
+                            : validatedMessage.Data);
+                }
 
-            await OnSecurityViolation.InvokeAsync(validatedMessage);
+                await OnSecurityViolation.InvokeAsync(validatedMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Error processing iframe message from {Origin}", origin);
         }
     }
 
     [JSInvokable]
     public Task Resize(double h)
     {
-        Height = $"{h}px";
-        StateHasChanged();
+        try
+        {
+            if (h > 0 && h <= 50000) // Reasonable height limit
+            {
+                Height = $"{h}px";
+                StateHasChanged();
+            }
+            else
+            {
+                Logger?.LogWarning("BlazorFrame received invalid height value: {Height}", h);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Error resizing BlazorFrame");
+        }
+        
         return Task.CompletedTask;
     }
 
@@ -149,12 +201,26 @@ public partial class BlazorFrame : IAsyncDisposable
             .Where(o => !string.IsNullOrEmpty(o))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+            
+        Logger?.LogDebug("BlazorFrame computed allowed origins: {Origins}", 
+            string.Join(", ", computedAllowedOrigins));
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (module is not null) 
-            await module.DisposeAsync();
-        objRef?.Dispose();
+        try
+        {
+            if (module is not null) 
+                await module.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogWarning(ex, "Error disposing BlazorFrame JavaScript module");
+        }
+        finally
+        {
+            objRef?.Dispose();
+            isInitialized = false;
+        }
     }
 }

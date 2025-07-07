@@ -55,4 +55,55 @@ public class MessageSecurityOptions
     /// Whether to log security violations for monitoring
     /// </summary>
     public bool LogSecurityViolations { get; set; } = true;
+
+    /// <summary>
+    /// Maximum JSON nesting depth allowed
+    /// </summary>
+    public int MaxJsonDepth { get; set; } = 10;
+
+    /// <summary>
+    /// Maximum number of properties allowed in a JSON object
+    /// </summary>
+    public int MaxObjectProperties { get; set; } = 100;
+
+    /// <summary>
+    /// Maximum number of elements allowed in a JSON array
+    /// </summary>
+    public int MaxArrayElements { get; set; } = 1000;
+
+    /// <summary>
+    /// Whether to allow JavaScript protocol URLs (javascript:, vbscript:, etc.)
+    /// </summary>
+    public bool AllowScriptProtocols { get; set; } = false;
+
+    /// <summary>
+    /// Custom validation function for additional security checks
+    /// </summary>
+    public Func<string, string, bool>? CustomValidator { get; set; }
+}
+
+/// <summary>
+/// Configuration options for iframe auto-resize behavior
+/// </summary>
+public class ResizeOptions
+{
+    /// <summary>
+    /// Minimum height for the iframe
+    /// </summary>
+    public int MinHeight { get; set; } = 100;
+
+    /// <summary>
+    /// Maximum height for the iframe
+    /// </summary>
+    public int MaxHeight { get; set; } = 50000;
+
+    /// <summary>
+    /// Resize polling interval in milliseconds (when ResizeObserver is not available)
+    /// </summary>
+    public int PollingInterval { get; set; } = 500;
+
+    /// <summary>
+    /// Whether to use ResizeObserver API when available
+    /// </summary>
+    public bool UseResizeObserver { get; set; } = true;
 }

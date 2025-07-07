@@ -1,4 +1,4 @@
-namespace BlazorFrame.Models;
+namespace BlazorFrame;
 
 /// <summary>
 /// Represents a validated message received from an iframe

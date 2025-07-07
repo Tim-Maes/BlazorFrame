@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
 	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	  <PackageId>BlazorFrame</PackageId>
-	  <Version>1.1.0</Version>
+	  <Version>1.1.1</Version>
 	  <Description>A secure Blazor iFrame component with built-in origin validation and message security.</Description>
 	  <PackageProjectUrl>https://www.github.com/Tim-Maes/BlazorFrame</PackageProjectUrl>
 	  <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -14,7 +14,6 @@
 	  <PackageTags>blazor; iframe; wasm; security; postmessage; origin-validation;</PackageTags>
 	  <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
-
 
   <ItemGroup>
     <SupportedPlatform Include="browser" />
@@ -24,10 +23,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.16" />
 	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.16" />
   </ItemGroup>
-	
-	<ItemGroup>
-		 <None Include="wwwroot\**\*" Pack="true" PackagePath="wwwroot" />
-	</ItemGroup>
 	
 	<ItemGroup>
 	  <None Include="..\..\LICENSE.txt">

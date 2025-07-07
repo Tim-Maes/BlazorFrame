@@ -1,6 +1,9 @@
 export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = []) {
+    console.log('BlazorFrame: Initializing with origins:', allowedOrigins);
+    
     function isOriginAllowed(origin) {
         if (!allowedOrigins || allowedOrigins.length === 0) {
+            console.warn('BlazorFrame: No allowed origins specified');
             return false;
         }
         return allowedOrigins.some(allowed => 
@@ -33,20 +36,28 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
             return;
         }
 
-        dotNetHelper.invokeMethodAsync(
-            'OnIframeMessage',
-            event.origin,
-            messageJson
-        );
+        console.log('BlazorFrame: Processing valid message from', event.origin);
+        
+        try {
+            dotNetHelper.invokeMethodAsync(
+                'OnIframeMessage',
+                event.origin,
+                messageJson
+            );
 
-        if (event.data?.type === 'resize' && typeof event.data.height === 'number') {
-            dotNetHelper.invokeMethodAsync('Resize', event.data.height);
+            if (event.data?.type === 'resize' && typeof event.data.height === 'number') {
+                dotNetHelper.invokeMethodAsync('Resize', event.data.height);
+            }
+        } catch (error) {
+            console.error('BlazorFrame: Error invoking .NET method:', error);
         }
     }
 
     window.addEventListener('message', onMessage);
+    console.log('BlazorFrame: Message listener added');
 
     if (enableResize) {
+        console.log('BlazorFrame: Auto-resize enabled');
         const resizeInterval = setInterval(() => {
             try {
                 const doc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -73,10 +84,12 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
         return () => {
             clearInterval(resizeInterval);
             window.removeEventListener('message', onMessage);
+            console.log('BlazorFrame: Cleanup completed');
         };
     }
 
     return () => {
         window.removeEventListener('message', onMessage);
+        console.log('BlazorFrame: Cleanup completed');
     };
 }

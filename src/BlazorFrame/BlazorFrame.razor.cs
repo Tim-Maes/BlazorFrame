@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Microsoft.Extensions.Logging;
-using BlazorFrame.Models;
 using BlazorFrame.Services;
 
 namespace BlazorFrame;
@@ -65,17 +64,27 @@ public partial class BlazorFrame : IAsyncDisposable
     {
         if (!firstRender) return;
         
-        module = await JSRuntime.InvokeAsync<IJSObjectReference>(
-          "import",
-          "./_content/BlazorFrame/blazorFrameInterop.js");
-        objRef = DotNetObjectReference.Create(this);
-        
-        await module.InvokeVoidAsync(
-          "initialize",
-          iframeElement,
-          objRef,
-          EnableAutoResize,
-          computedAllowedOrigins.ToArray());
+        try
+        {
+            module = await JSRuntime.InvokeAsync<IJSObjectReference>(
+              "import",
+              "./_content/BlazorFrame/blazorFrameInterop.js");
+            objRef = DotNetObjectReference.Create(this);
+            
+            await module.InvokeVoidAsync(
+              "initialize",
+              iframeElement,
+              objRef,
+              EnableAutoResize,
+              computedAllowedOrigins.ToArray());
+        }
+        catch (Exception ex)
+        {
+            if (Logger != null)
+            {
+                Logger.LogError(ex, "Failed to initialize BlazorFrame JavaScript module");
+            }
+        }
     }
 
     private Task OnLoadHandler() => OnLoad.InvokeAsync();

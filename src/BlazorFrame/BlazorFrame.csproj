@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
 	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	  <PackageId>BlazorFrame</PackageId>
-	  <Version>1.2.2</Version>
+	  <Version>1.2.3</Version>
 	  <Description>A enhanced secure Blazor iFrame component with built-in origin validation and message security.</Description>
 	  <PackageProjectUrl>https://www.github.com/Tim-Maes/BlazorFrame</PackageProjectUrl>
 	  <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -34,15 +34,15 @@
 	    <PackagePath>\</PackagePath>
 	  </None>
 	</ItemGroup>
-	
+
 	<ItemGroup>
-		<Content Remove="wwwroot\js\**\*.*" />
+		<Content Remove="wwwroot/js/**" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<Content Include="wwwroot\js\**\*.*">
+		<Content Include="wwwroot/js/**">
 			<Pack>true</Pack>
-			<PackagePath>staticwebassets\$(PackageId)\js\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+			<PackagePath>staticwebassets/$(PackageId)/js/%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
 		</Content>
 	</ItemGroup>
 	

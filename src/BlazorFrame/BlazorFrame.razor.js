@@ -77,6 +77,7 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
                     iframe.style.height = height + 'px';
                 }
             } catch (error) {
+                // Cross-origin access denied - this is expected
                 clearInterval(resizeInterval);
             }
         }, 500);

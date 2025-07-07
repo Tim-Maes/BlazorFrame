@@ -68,7 +68,7 @@ public partial class BlazorFrame : IAsyncDisposable
         {
             module = await JSRuntime.InvokeAsync<IJSObjectReference>(
               "import",
-              "./_content/BlazorFrame/blazorFrameInterop.js");
+              "./BlazorFrame.razor.js");
             objRef = DotNetObjectReference.Create(this);
             
             await module.InvokeVoidAsync(

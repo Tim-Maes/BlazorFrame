@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
 	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	  <PackageId>BlazorFrame</PackageId>
-	  <Version>1.1.1</Version>
+	  <Version>1.1.2</Version>
 	  <Description>A secure Blazor iFrame component with built-in origin validation and message security.</Description>
 	  <PackageProjectUrl>https://www.github.com/Tim-Maes/BlazorFrame</PackageProjectUrl>
 	  <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -33,5 +33,9 @@
 	    <Pack>True</Pack>
 	    <PackagePath>\</PackagePath>
 	  </None>
+	</ItemGroup>
+	
+	<ItemGroup>
+	  <Folder Include="wwwroot\" />
 	</ItemGroup>
 </Project>

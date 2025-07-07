@@ -130,7 +130,6 @@ internal class MessageValidationService
             using var document = JsonDocument.Parse(messageJson, options);
             var root = document.RootElement;
 
-            // Validate JSON structure depth and complexity
             if (!ValidateElementComplexity(root, 0, maxDepth))
             {
                 return (false, "JSON structure is too complex or deeply nested", null);
@@ -141,7 +140,6 @@ internal class MessageValidationService
             {
                 messageType = typeElement.GetString();
                 
-                // Validate message type
                 if (!string.IsNullOrEmpty(messageType) && !IsValidMessageType(messageType))
                 {
                     return (false, $"Invalid message type: {messageType}", null);
@@ -164,7 +162,7 @@ internal class MessageValidationService
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-                if (element.GetRawText().Length > 10000) // Limit object size
+                if (element.GetRawText().Length > 10000)
                     return false;
                     
                 foreach (var property in element.EnumerateObject())
@@ -175,7 +173,7 @@ internal class MessageValidationService
                 break;
 
             case JsonValueKind.Array:
-                if (element.GetArrayLength() > 1000) // Limit array size
+                if (element.GetArrayLength() > 1000)
                     return false;
                     
                 foreach (var item in element.EnumerateArray())
@@ -191,10 +189,8 @@ internal class MessageValidationService
 
     private static bool ContainsSuspiciousContent(string messageJson)
     {
-        // Remove comments that could hide malicious content
         var cleanJson = JsonCommentRegex.Replace(messageJson, "");
         
-        // Check for common XSS patterns
         var suspiciousPatterns = new[]
         {
             "<script",
@@ -220,7 +216,6 @@ internal class MessageValidationService
 
     private static bool IsValidMessageType(string messageType)
     {
-        // Allow alphanumeric, hyphens, underscores, and dots
         return messageType.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '.');
     }
 

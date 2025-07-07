@@ -70,7 +70,7 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
             try {
                 const doc = iframe.contentDocument || iframe.contentWindow?.document;
                 if (!doc) {
-                    return false; // Signal that iframe is not accessible
+                    return false;
                 }
 
                 const height = Math.max(
@@ -91,7 +91,6 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
             }
         }
 
-        // Try to use ResizeObserver for better performance
         if (window.ResizeObserver) {
             try {
                 const doc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -103,12 +102,10 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
                     resizeObserver.observe(doc.documentElement);
                 }
             } catch (error) {
-                // Fallback to polling if ResizeObserver fails
                 resizeObserver = null;
             }
         }
 
-        // Fallback to polling if ResizeObserver is not available or failed
         if (!resizeObserver) {
             fallbackInterval = setInterval(() => {
                 if (!updateHeight()) {

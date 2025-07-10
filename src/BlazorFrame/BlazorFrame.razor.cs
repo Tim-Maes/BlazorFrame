@@ -11,6 +11,7 @@ public partial class BlazorFrame : IAsyncDisposable
     private IJSObjectReference? module;
     private DotNetObjectReference<BlazorFrame>? objRef;
     private readonly MessageValidationService validationService = new();
+    private readonly CspBuilderService cspBuilderService = new();
     private List<string> computedAllowedOrigins = new();
     private bool isInitialized = false;
     private readonly object initializationLock = new();
@@ -35,6 +36,12 @@ public partial class BlazorFrame : IAsyncDisposable
     /// </summary>
     [Parameter] public MessageSecurityOptions SecurityOptions { get; set; } = new();
 
+    /// <summary>
+    /// Content Security Policy options for iframe security.
+    /// When provided, CSP header recommendations will be generated.
+    /// </summary>
+    [Parameter] public CspOptions? CspOptions { get; set; }
+
     [Parameter] public EventCallback OnLoad { get; set; }
     [Parameter] public EventCallback<string> OnMessage { get; set; }
 
@@ -53,6 +60,11 @@ public partial class BlazorFrame : IAsyncDisposable
     /// </summary>
     [Parameter] public EventCallback<Exception> OnInitializationError { get; set; }
 
+    /// <summary>
+    /// Event fired when CSP header is generated, allowing the application to apply it
+    /// </summary>
+    [Parameter] public EventCallback<CspHeader> OnCspHeaderGenerated { get; set; }
+
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object> AdditionalAttributes { get; set; } = new();
 
@@ -60,6 +72,40 @@ public partial class BlazorFrame : IAsyncDisposable
       EnableScroll
         ? "iframe-wrapper scrollable"
         : "iframe-wrapper";
+
+    /// <summary>
+    /// Gets the recommended CSP header for the current configuration
+    /// </summary>
+    /// <returns>CSP header or null if CSP is not configured</returns>
+    public CspHeader? GetRecommendedCspHeader()
+    {
+        if (CspOptions == null) return null;
+        
+        var iframeSources = new List<string>();
+        if (!string.IsNullOrEmpty(Src))
+        {
+            iframeSources.Add(Src);
+        }
+        
+        return cspBuilderService.BuildCspHeader(CspOptions, iframeSources);
+    }
+
+    /// <summary>
+    /// Validates the current CSP configuration
+    /// </summary>
+    /// <returns>CSP validation result or null if CSP is not configured</returns>
+    public CspValidationResult? ValidateCspConfiguration()
+    {
+        if (CspOptions == null) return null;
+        
+        return cspBuilderService.ValidateCspOptions(CspOptions);
+    }
+
+    /// <summary>
+    /// Gets CSP helper methods for creating common configurations
+    /// </summary>
+    /// <returns>CSP builder service for advanced configuration</returns>
+    public CspBuilderService GetCspBuilder() => cspBuilderService;
 
     protected override void OnParametersSet()
     {
@@ -92,6 +138,9 @@ public partial class BlazorFrame : IAsyncDisposable
               computedAllowedOrigins.ToArray());
               
             Logger?.LogDebug("BlazorFrame initialized successfully for {Src}", Src);
+            
+            // Generate and fire CSP header event if configured
+            await HandleCspHeaderGeneration();
         }
         catch (Exception ex)
         {
@@ -103,6 +152,39 @@ public partial class BlazorFrame : IAsyncDisposable
             }
             
             await OnInitializationError.InvokeAsync(ex);
+        }
+    }
+
+    private async Task HandleCspHeaderGeneration()
+    {
+        try
+        {
+            var cspHeader = GetRecommendedCspHeader();
+            if (cspHeader != null)
+            {
+                Logger?.LogDebug("Generated CSP header for BlazorFrame: {Header}", cspHeader.HeaderValue);
+                
+                // Validate CSP configuration and log warnings
+                var validationResult = ValidateCspConfiguration();
+                if (validationResult != null)
+                {
+                    foreach (var warning in validationResult.Warnings)
+                    {
+                        Logger?.LogWarning("CSP Warning: {Warning}", warning);
+                    }
+                    
+                    foreach (var suggestion in validationResult.Suggestions)
+                    {
+                        Logger?.LogInformation("CSP Suggestion: {Suggestion}", suggestion);
+                    }
+                }
+                
+                await OnCspHeaderGenerated.InvokeAsync(cspHeader);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Error generating CSP header for BlazorFrame");
         }
     }
 

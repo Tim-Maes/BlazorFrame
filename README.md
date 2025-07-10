@@ -5,6 +5,7 @@ A Blazor component that provides an enhanced iframe wrapper with automatic resiz
 ## Features
 
 - **Security-First Design** - Origin validation, message filtering, and comprehensive security options
+- **Content Security Policy Integration** - Built-in CSP helpers for iframe security
 - **Responsive** - Dynamically resizes iframe based on content height (can be enabled/disabled)
 - **Cross-Frame Messaging** - Built-in support for postMessage communication with validation
 - **Event Callbacks** - OnLoad, OnMessage, and security event handling
@@ -17,19 +18,18 @@ A Blazor component that provides an enhanced iframe wrapper with automatic resiz
 
 Install the package via NuGet Package Manager:
 
-```bash
+```
 dotnet add package BlazorFrame
 ```
-
 Or via Package Manager Console:
 
-```bash
+```
 Install-Package BlazorFrame
 ```
 
 ## Quick Start (Secure by Default)
 
-```razor
+```
 @using BlazorFrame
 
 <BlazorFrame Src="https://example.com" />
@@ -43,7 +43,6 @@ The component automatically derives allowed origins from the `Src` URL for secur
 
 ```razor
 @using BlazorFrame
-@using BlazorFrame.Models
 
 <BlazorFrame Src="@iframeUrl"
             Width="100%"
@@ -82,7 +81,6 @@ The component automatically derives allowed origins from the `Src` URL for secur
 
 ```razor
 @using BlazorFrame
-@using BlazorFrame.Models
 
 <BlazorFrame Src="@iframeUrl"
             AllowedOrigins="@allowedOrigins"
@@ -121,17 +119,57 @@ The component automatically derives allowed origins from the `Src` URL for secur
 }
 ```
 
+### Content Security Policy Integration
+
+```razor
+@using BlazorFrame
+
+<BlazorFrame Src="@iframeUrl"
+            CspOptions="@cspOptions"
+            OnCspHeaderGenerated="HandleCspGenerated"
+            OnValidatedMessage="HandleValidatedMessage" />
+
+@code {
+    private string iframeUrl = "https://widget.example.com";
+    
+    private CspOptions cspOptions = new CspOptions()
+        .AllowSelf()
+        .AllowFrameSources("https://widget.example.com", "https://trusted-cdn.com")
+        .AllowHttpsFrames()
+        .WithCustomDirective("img-src", "'self'", "data:", "https:");
+
+    private Task HandleCspGenerated(CspHeader cspHeader)
+    {
+        // Apply CSP header to your response
+        Console.WriteLine($"Generated CSP: {cspHeader.HeaderValue}");
+        
+        // In a real application, you might apply this to the HTTP response:
+        // HttpContext.Response.Headers.Add(cspHeader.HeaderName, cspHeader.HeaderValue);
+        
+        return Task.CompletedTask;
+    }
+
+    private Task HandleValidatedMessage(IframeMessage message)
+    {
+        // Handle validated messages
+        return Task.CompletedTask;
+    }
+}
+```
+
 ## Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `Src` | `string` | `""` | The URL to load in the iframe |
 | `Width` | `string` | `"100%"` | The width of the iframe |
+| `CspOptions` | `CspOptions?` | `null` | Content Security Policy configuration options |
 | `Height` | `string` | `"600px"` | The initial height of the iframe |
 | `EnableAutoResize` | `bool` | `true` | Whether to automatically resize the iframe based on content height |
 | `EnableScroll` | `bool` | `false` | Whether to enable scrolling within the iframe wrapper |
 | `AllowedOrigins` | `List<string>?` | `null` | Explicit list of allowed origins. If null, auto-derives from Src |
 | `SecurityOptions` | `MessageSecurityOptions` | `new()` | Security configuration options |
+| `OnCspHeaderGenerated` | `EventCallback<CspHeader>` | - | Callback fired when CSP header is generated |
 | `OnLoad` | `EventCallback` | - | Callback fired when the iframe loads |
 | `OnMessage` | `EventCallback<string>` | - | Callback fired when receiving valid postMessage (legacy) |
 | `OnValidatedMessage` | `EventCallback<IframeMessage>` | - | Callback fired with full message validation details |
@@ -179,6 +217,63 @@ public class IframeMessage
     public bool IsValid { get; init; }                  // Security validation result
     public string? ValidationError { get; init; }       // Error details (if any)
     public string? MessageType { get; init; }           // Extracted message type
+}
+```
+
+### Content Security Policy (CSP)
+
+BlazorFrame includes comprehensive CSP support to enhance iframe security:
+
+```csharp
+@using BlazorFrame
+
+// Create CSP options with fluent API
+var cspOptions = new CspOptions()
+    .AllowSelf()
+    .AllowFrameSources("https://trusted-domain.com")
+    .AllowHttpsFrames()
+    .WithScriptNonce("abc123")
+    .ForProduction();
+
+// Get CSP header for your HTTP response
+var cspHeader = blazorFrame.GetRecommendedCspHeader();
+```
+
+#### CSP Configuration Examples
+
+```csharp
+// Development environment (relaxed security)
+var devCsp = new CspOptions().ForDevelopment();
+
+// Production environment (strict security)
+var prodCsp = new CspOptions()
+    .ForProduction()
+    .AllowFrameSources("https://trusted-widget.com")
+    .WithScriptNonce(nonceValue);
+
+// Custom configuration
+var customCsp = new CspOptions()
+    .AllowSelf()
+    .AllowFrameSources("https://widget.example.com", "https://cdn.example.com")
+    .AllowDataUrls()
+    .WithCustomDirective("img-src", "'self'", "data:", "https:")
+    .AsReportOnly("https://csp-report.example.com/report");
+```
+
+#### CSP Helper Methods
+
+```csharp
+// Generate CSP meta tag for HTML
+var metaTag = cspBuilder.BuildCspMetaTag(cspOptions);
+
+// Generate JavaScript to set CSP dynamically
+var jsCode = cspBuilder.BuildCspJavaScript(cspOptions);
+
+// Validate CSP configuration
+var validation = cspBuilder.ValidateCspOptions(cspOptions);
+foreach (var warning in validation.Warnings)
+{
+    Console.WriteLine($"CSP Warning: {warning}");
 }
 ```
 
@@ -233,7 +328,7 @@ window.parent.postMessage({
 
 ### Receiving Validated Messages
 
-```javascript
+```csharp
 private Task HandleValidatedMessage(IframeMessage message)
 {
     // message.Origin - verified sender origin
@@ -271,11 +366,7 @@ The wrapper provides:
 
 <!-- Data URLs -->
 <BlazorFrame Src="data:text/html,<h1>Hello World!</h1>" />
-```
-
 ### Multi-Domain Setup
-
-```razor
 <BlazorFrame Src="https://widget.example.com"
             AllowedOrigins="@(new List<string> 
             { 
@@ -284,17 +375,33 @@ The wrapper provides:
             })" />
 ```
 
-### High-Security Configuration
+### High-Security Configuration with CSP
 
 ```razor
+@using BlazorFrame
+
 <BlazorFrame Src="@secureUrl"
-            SecurityOptions="@(new MessageSecurityOptions
-            {
-                EnableStrictValidation = true,
-                MaxMessageSize = 16 * 1024, // 16KB limit
-                LogSecurityViolations = true
-            })"
-            OnSecurityViolation="HandleViolation" />
+            SecurityOptions="@securityOptions"
+            CspOptions="@cspOptions"
+            OnSecurityViolation="HandleViolation"
+            OnCspHeaderGenerated="HandleCspGenerated" />
+
+@code {
+    private string secureUrl = "https://secure-widget.com";
+    
+    private MessageSecurityOptions securityOptions = new()
+    {
+        EnableStrictValidation = true,
+        MaxMessageSize = 16 * 1024, // 16KB limit
+        LogSecurityViolations = true
+    };
+    
+    private CspOptions cspOptions = new CspOptions()
+        .ForProduction()
+        .AllowFrameSources("https://secure-widget.com")
+        .WithScriptNonce("secure-nonce-123")
+        .WithCustomDirective("connect-src", "'self'", "https://api.secure-widget.com");
+}
 ```
 
 ### Responsive Design

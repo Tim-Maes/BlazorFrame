@@ -1,35 +1,4 @@
-namespace BlazorFrame;
-
-/// <summary>
-/// Represents a validated message received from an iframe
-/// </summary>
-public class IframeMessage
-{
-    /// <summary>
-    /// The origin (protocol + domain + port) of the sender
-    /// </summary>
-    public required string Origin { get; init; }
-
-    /// <summary>
-    /// The raw message data as JSON string
-    /// </summary>
-    public required string Data { get; init; }
-
-    /// <summary>
-    /// Whether this message passed all security validations
-    /// </summary>
-    public bool IsValid { get; init; }
-
-    /// <summary>
-    /// Any validation errors encountered
-    /// </summary>
-    public string? ValidationError { get; init; }
-
-    /// <summary>
-    /// The type of message (if specified in the data)
-    /// </summary>
-    public string? MessageType { get; init; }
-}
+﻿namespace BlazorFrame;
 
 /// <summary>
 /// Options for configuring iframe message security
@@ -80,30 +49,4 @@ public class MessageSecurityOptions
     /// Custom validation function for additional security checks
     /// </summary>
     public Func<string, string, bool>? CustomValidator { get; set; }
-}
-
-/// <summary>
-/// Configuration options for iframe auto-resize behavior
-/// </summary>
-public class ResizeOptions
-{
-    /// <summary>
-    /// Minimum height for the iframe
-    /// </summary>
-    public int MinHeight { get; set; } = 100;
-
-    /// <summary>
-    /// Maximum height for the iframe
-    /// </summary>
-    public int MaxHeight { get; set; } = 50000;
-
-    /// <summary>
-    /// Resize polling interval in milliseconds (when ResizeObserver is not available)
-    /// </summary>
-    public int PollingInterval { get; set; } = 500;
-
-    /// <summary>
-    /// Whether to use ResizeObserver API when available
-    /// </summary>
-    public bool UseResizeObserver { get; set; } = true;
 }

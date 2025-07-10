@@ -449,6 +449,12 @@ The wrapper provides:
 6. **Use HTTPS** for iframe sources when possible
 7. **Implement proper error handling** for security violations
 
+## Demo
+
+Click the image to go to the demo project
+
+[![BlazorFrameDemo](https://github.com/user-attachments/assets/106e02f8-5b7a-4a02-9748-b5fc1f540168)](https://www.github.com/Tim-Maes/BlazorFrameDemo)
+
 ## Requirements
 
 - .NET 8.0 or later

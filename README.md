@@ -451,7 +451,7 @@ The wrapper provides:
 
 ## Demo
 
-Click the image to go to the demo project
+Click the image to go to the demo project, which has various BlazorFrame iframes with different configurations.
 
 [![BlazorFrameDemo](https://github.com/user-attachments/assets/106e02f8-5b7a-4a02-9748-b5fc1f540168)](https://www.github.com/Tim-Maes/BlazorFrameDemo)
 

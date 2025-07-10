@@ -473,18 +473,4 @@ If you encounter any issues or have questions:
 - [Open an issue](https://github.com/Tim-Maes/BlazorFrame/issues) on GitHub
 - Check existing issues for solutions
 - Suggest new features or improvements
-
-## Version History
-
-### v1.1.0
-- Added comprehensive security features
-- Origin validation and message filtering
-- Security event callbacks
-- Enhanced logging support
-- Backward compatibility maintained
-
-### v1.0.1
-- Initial release
-- Basic iframe wrapper
-- Auto-resize functionality
-- PostMessage support
+- 

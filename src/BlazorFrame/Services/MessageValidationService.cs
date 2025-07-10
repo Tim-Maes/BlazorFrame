@@ -41,7 +41,6 @@ internal class MessageValidationService
                 $"Message size ({messageJson.Length} bytes) exceeds maximum allowed size ({options.MaxMessageSize} bytes)");
         }
 
-        // Check for potentially malicious content
         if (ContainsSuspiciousContent(messageJson))
         {
             return CreateInvalidMessage(origin, messageJson, "Message contains potentially malicious content");

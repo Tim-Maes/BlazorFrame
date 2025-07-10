@@ -45,19 +45,14 @@ public class CspBuilderService
     {
         var directives = new Dictionary<string, List<string>>();
         
-        // Handle frame-src and child-src directives
         BuildFrameDirectives(directives, options, iframeSources);
         
-        // Handle script-src directive
         BuildScriptDirectives(directives, options);
         
-        // Handle frame-ancestors directive
         BuildFrameAncestorsDirectives(directives, options);
         
-        // Add custom directives
         AddCustomDirectives(directives, options);
         
-        // Build the CSP header value
         var headerValue = BuildHeaderValue(directives, options);
         
         var headerName = options.ReportOnly 
@@ -138,7 +133,6 @@ public class CspBuilderService
         var errors = new List<string>();
         var suggestions = new List<string>();
 
-        // Check for unsafe practices
         if (options.AllowInlineScripts)
         {
             warnings.Add("Using 'unsafe-inline' in script-src reduces security. Consider using nonces or strict-dynamic.");
@@ -149,13 +143,11 @@ public class CspBuilderService
             warnings.Add("Using 'unsafe-eval' in script-src can enable code injection attacks.");
         }
 
-        // Check for missing essential directives
         if (options.FrameSrc.Count == 0 && options.ChildSrc.Count == 0 && options.AutoDeriveFrameSrc == false)
         {
             suggestions.Add("Consider adding frame-src or child-src directives to control iframe sources.");
         }
 
-        // Check for nonce usage
         if (!string.IsNullOrEmpty(options.ScriptNonce))
         {
             if (options.AllowInlineScripts)
@@ -164,7 +156,6 @@ public class CspBuilderService
             }
         }
 
-        // Check for strict-dynamic usage
         if (options.UseStrictDynamic)
         {
             if (options.AllowInlineScripts || options.AllowEval)
@@ -173,7 +164,6 @@ public class CspBuilderService
             }
         }
 
-        // Check for report-only mode
         if (options.ReportOnly && string.IsNullOrEmpty(options.ReportUri))
         {
             suggestions.Add("Consider adding a report-uri when using report-only mode to collect violation reports.");
@@ -252,23 +242,20 @@ public class CspBuilderService
     {
         var frameSources = new List<string>();
         
-        // Add explicitly configured frame sources
         frameSources.AddRange(options.FrameSrc);
         
-        // Auto-derive from iframe sources if enabled
         if (options.AutoDeriveFrameSrc && iframeSources != null)
         {
             var derivedOrigins = ExtractValidOrigins(iframeSources);
             frameSources.AddRange(derivedOrigins);
         }
         
-        // Remove duplicates and add to directives
         if (frameSources.Count > 0)
         {
             directives["frame-src"] = frameSources.Distinct().ToList();
         }
         
-        // Handle child-src (fallback for older browsers)
+        // fallback for older browsers
         if (options.ChildSrc.Count > 0)
         {
             directives["child-src"] = options.ChildSrc.Distinct().ToList();
@@ -279,25 +266,21 @@ public class CspBuilderService
     {
         var scriptSources = new List<string>(options.ScriptSrc);
         
-        // Add nonce if specified
         if (!string.IsNullOrEmpty(options.ScriptNonce))
         {
             scriptSources.Add($"'nonce-{options.ScriptNonce}'");
         }
         
-        // Add unsafe-inline if allowed
         if (options.AllowInlineScripts)
         {
             scriptSources.Add(Sources.UnsafeInline);
         }
         
-        // Add unsafe-eval if allowed
         if (options.AllowEval)
         {
             scriptSources.Add(Sources.UnsafeEval);
         }
         
-        // Add strict-dynamic if enabled
         if (options.UseStrictDynamic)
         {
             scriptSources.Add(Sources.StrictDynamic);
@@ -348,7 +331,6 @@ public class CspBuilderService
             }
         }
         
-        // Add report-uri if specified
         if (!string.IsNullOrEmpty(options.ReportUri))
         {
             if (sb.Length > 0)

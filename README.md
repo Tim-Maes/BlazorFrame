@@ -29,7 +29,7 @@ Install-Package BlazorFrame
 
 ## Quick Start (Secure by Default)
 
-```
+```razor
 @using BlazorFrame
 
 <BlazorFrame Src="https://example.com" />

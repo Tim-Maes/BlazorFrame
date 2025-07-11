@@ -49,4 +49,56 @@ public class MessageSecurityOptions
     /// Custom validation function for additional security checks
     /// </summary>
     public Func<string, string, bool>? CustomValidator { get; set; }
+
+    /// <summary>
+    /// Iframe sandbox attributes for content isolation. 
+    /// If null, no sandbox attribute is applied (maintains backward compatibility).
+    /// Common values: "allow-scripts allow-same-origin", "allow-forms", etc.
+    /// Takes precedence over SandboxPreset if both are set.
+    /// </summary>
+    public string? Sandbox { get; set; } = null;
+
+    /// <summary>
+    /// Predefined sandbox configuration preset.
+    /// Ignored if Sandbox property is explicitly set.
+    /// </summary>
+    public SandboxPreset SandboxPreset { get; set; } = SandboxPreset.None;
+
+    /// <summary>
+    /// Enable automatic sandbox with safe defaults for iframe content isolation.
+    /// When true, applies SandboxPreset.Basic unless Sandbox or SandboxPreset is explicitly set.
+    /// </summary>
+    public bool EnableSandbox { get; set; } = false;
+
+    /// <summary>
+    /// Require HTTPS for iframe sources to ensure transport security
+    /// </summary>
+    public bool RequireHttps { get; set; } = false;
+
+    /// <summary>
+    /// Allow insecure (HTTP) connections in development scenarios
+    /// </summary>
+    public bool AllowInsecureConnections { get; set; } = false;
+
+    /// <summary>
+    /// Gets the effective sandbox value based on configuration priority:
+    /// 1. Explicit Sandbox property
+    /// 2. SandboxPreset (if not None)
+    /// 3. EnableSandbox with Basic preset
+    /// 4. null (no sandbox)
+    /// </summary>
+    /// <returns>The sandbox attribute value to use, or null if no sandbox should be applied</returns>
+    public string? GetEffectiveSandboxValue()
+    {
+        if (!string.IsNullOrEmpty(Sandbox))
+            return Sandbox;
+
+        if (SandboxPreset != SandboxPreset.None)
+            return SandboxHelper.GetSandboxValue(SandboxPreset);
+
+        if (EnableSandbox)
+            return SandboxHelper.GetSandboxValue(SandboxPreset.Basic);
+
+        return null;
+    }
 }

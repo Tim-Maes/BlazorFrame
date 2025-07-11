@@ -2,6 +2,7 @@
     <iframe @ref="iframeElement"
             src="@Src"
             style="width:@Width; height:@Height;"
+            sandbox="@EffectiveSandboxValue"
             @attributes="AdditionalAttributes"
             @onload="OnLoadHandler">
     </iframe>

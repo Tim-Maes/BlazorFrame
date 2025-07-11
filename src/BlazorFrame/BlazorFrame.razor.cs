@@ -74,6 +74,11 @@ public partial class BlazorFrame : IAsyncDisposable
         : "iframe-wrapper";
 
     /// <summary>
+    /// Gets the effective sandbox attribute value based on security options configuration
+    /// </summary>
+    private string? EffectiveSandboxValue => SecurityOptions.GetEffectiveSandboxValue();
+
+    /// <summary>
     /// Gets the recommended CSP header for the current configuration
     /// </summary>
     /// <returns>CSP header or null if CSP is not configured</returns>
@@ -111,6 +116,43 @@ public partial class BlazorFrame : IAsyncDisposable
     {
         base.OnParametersSet();
         UpdateAllowedOrigins();
+        ValidateSrcUrl();
+    }
+
+    private void ValidateSrcUrl()
+    {
+        if (string.IsNullOrEmpty(Src))
+            return;
+
+        var urlValidation = validationService.ValidateUrl(Src, SecurityOptions);
+        if (!urlValidation.IsValid)
+        {
+            Logger?.LogWarning("BlazorFrame Src URL validation failed: {Error}. URL: {Src}", 
+                urlValidation.ErrorMessage, Src);
+
+            // Create a security violation for URL validation failure
+            var violationMessage = new IframeMessage
+            {
+                Origin = Src,
+                Data = $"URL validation failed: {urlValidation.ErrorMessage}",
+                IsValid = false,
+                ValidationError = urlValidation.ErrorMessage,
+                MessageType = "url-validation"
+            };
+
+            // Fire security violation event asynchronously
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await OnSecurityViolation.InvokeAsync(violationMessage);
+                }
+                catch (Exception ex)
+                {
+                    Logger?.LogError(ex, "Error invoking security violation callback for URL validation");
+                }
+            });
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

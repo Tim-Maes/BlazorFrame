@@ -108,6 +108,63 @@ internal class MessageValidationService
         }
     }
 
+    /// <summary>
+    /// Validates a URL against security requirements
+    /// </summary>
+    /// <param name="url">The URL to validate</param>
+    /// <param name="options">Security options containing validation rules</param>
+    /// <returns>Validation result</returns>
+    public (bool IsValid, string? ErrorMessage) ValidateUrl(string url, MessageSecurityOptions options)
+    {
+        if (string.IsNullOrEmpty(url))
+            return (false, "URL cannot be null or empty");
+
+        try
+        {
+            // Handle relative URLs
+            if (url.StartsWith("/"))
+                return (true, null); // Relative URLs are considered safe
+
+            // Handle special schemes
+            if (url.StartsWith("data:"))
+                return (true, null);
+
+            if (url.StartsWith("blob:"))
+                return (true, null);
+
+            var uri = new Uri(url);
+
+            // Validate scheme
+            if (!IsValidScheme(uri.Scheme))
+                return (false, $"URL scheme '{uri.Scheme}' is not allowed");
+
+            // Check HTTPS requirement
+            if (options.RequireHttps && uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!options.AllowInsecureConnections)
+                    return (false, "HTTPS is required but URL uses HTTP protocol");
+            }
+
+            // Check script protocols if not allowed
+            if (!options.AllowScriptProtocols)
+            {
+                var scriptProtocols = new[] { "javascript", "vbscript", "livescript" };
+                if (scriptProtocols.Contains(uri.Scheme.ToLowerInvariant()))
+                    return (false, $"Script protocol '{uri.Scheme}' is not allowed");
+            }
+
+            return (true, null);
+        }
+        catch (UriFormatException ex)
+        {
+            return (false, $"Invalid URL format: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"URL validation error: {ex.Message}");
+        }
+    }
+
     private static bool IsOriginAllowed(string origin, IReadOnlyList<string> allowedOrigins)
     {
         if (allowedOrigins.Count == 0)

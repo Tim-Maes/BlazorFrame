@@ -17,7 +17,7 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 
 ## Documentation
 
-**[Complete Documentation](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/index.md)**
+**[Complete Documentation](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs)**
 
 - [Quick Start Guide](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/getting-started/quick-start.md)
 

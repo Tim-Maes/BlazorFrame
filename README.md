@@ -9,11 +9,22 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 ## Features
 
 - **Security-First Design** - Built-in origin validation, message filtering, and sandbox isolation
-- **Automatic Resizing** - Smart height adjustment based on iframe content
 - **Content Security Policy** - Comprehensive CSP integration with fluent configuration API
 - **Cross-Frame Messaging** - Secure postMessage communication with validation
 - **Sandbox Support** - Multiple security levels from permissive to paranoid isolation
 - **Environment-Aware** - Different configurations for development vs production
+- **Automatic Resizing** - Smart height adjustment based on iframe content
+
+## Documentation
+
+**[Complete Documentation](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs)**
+
+- [Quick Start Guide](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/getting-started/quick-start.md)
+- [Security Features](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/security)
+- [Configuration Guide](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/configuration)  
+- [Real-world Examples](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/examples)
+- [API Reference](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/api)
+- [Troubleshooting](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/advanced/troubleshooting.md)
 
 ## :rocket: Quick Start
 
@@ -43,8 +54,17 @@ dotnet add package BlazorFrame
         .WithBasicSandbox()     // Enable iframe sandboxing
         .RequireHttps();        // Enforce HTTPS transport
         
-    private Task HandleMessage(IframeMessage message) => Task.CompletedTask;
-    private Task HandleViolation(IframeMessage violation) => Task.CompletedTask;
+    private Task HandleMessage(IframeMessage message)
+    {
+        Console.WriteLine($"Received message from {message.Origin}: {message.Data}");
+        return Task.CompletedTask;
+    }
+
+    private Task HandleViolation(IframeMessage violation)
+    {
+        Console.WriteLine($"Security violation: {violation.ValidationError}");
+        return Task.CompletedTask;
+    };
 }
 ```
 
@@ -108,17 +128,6 @@ All iframe messages are automatically validated for:
 - **Content validation** - JSON structure and size limits
 - **Security filtering** - Blocks malicious patterns and script injection
 - **Custom validation** - Extensible validation pipeline
-
-## Documentation
-
-**[Complete Documentation](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs)**
-
-- [Quick Start Guide](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/getting-started/quick-start.md)
-- [Security Features](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/security)
-- [Configuration Guide](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/configuration)  
-- [Real-world Examples](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/examples)
-- [API Reference](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/api)
-- [Troubleshooting](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/advanced/troubleshooting.md)
 
 ## Demo
 

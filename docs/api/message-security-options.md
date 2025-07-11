@@ -547,9 +547,3 @@ var insecure = new MessageSecurityOptions
 ```
 
 ---
-
-**Related Topics:**
-- [Security Overview](../security/overview.md) - Complete security features
-- [Configuration Extensions](../configuration/extensions.md) - Fluent API methods
-- [Sandbox Security](../security/sandbox.md) - Sandbox configuration details
-- [HTTPS Enforcement](../security/https-enforcement.md) - Transport security

@@ -525,9 +525,3 @@ Monitor configuration issues using the `OnSecurityViolation` event:
 ```
 
 ---
-
-**Related Topics:**
-- [Security Options](../configuration/security-options.md) - MessageSecurityOptions reference
-- [CSP Configuration](../csp/configuration.md) - CspOptions reference
-- [Event Handling](../core-features/events.md) - Event callbacks details
-- [Examples](../examples/common-scenarios.md) - Real-world parameter usage

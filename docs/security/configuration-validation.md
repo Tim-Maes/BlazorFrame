@@ -471,9 +471,3 @@ public class ConfigurationValidationResult
 | High MaxJsonDepth | "Consider reducing MaxJsonDepth to prevent DoS attacks" |
 
 ---
-
-**Related Topics:**
-- [Security Overview](overview.md) - Complete security feature overview
-- [Sandbox Security](sandbox.md) - Iframe sandbox configuration
-- [HTTPS Enforcement](https-enforcement.md) - Transport security
-- [MessageSecurityOptions API](../api/message-security-options.md) - Complete API reference

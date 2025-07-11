@@ -599,9 +599,3 @@ Actual: Security violation prevents widget loading
 - **Examples**: [Common Scenarios](../examples/common-scenarios.md)
 
 ---
-
-**Related Topics:**
-- [Security Overview](../security/overview.md) - Understanding security features
-- [Configuration Validation](../security/configuration-validation.md) - Real-time validation
-- [Performance Optimization](performance.md) - Improving performance
-- [API Reference](../api/blazorframe-component.md) - Complete component API

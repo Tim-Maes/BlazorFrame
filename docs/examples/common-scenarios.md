@@ -716,9 +716,3 @@ Real-world examples and patterns for using BlazorFrame in common scenarios. Each
 ```
 
 ---
-
-**Related Topics:**
-- [Security Options](../configuration/security-options.md) - Detailed security configuration
-- [Sandbox Security](../security/sandbox.md) - Iframe sandbox configuration
-- [CSP Configuration](../csp/configuration.md) - Content Security Policy setup
-- [Event Handling](../core-features/events.md) - Message and event handling

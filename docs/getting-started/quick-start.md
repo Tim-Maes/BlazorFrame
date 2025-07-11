@@ -119,32 +119,6 @@ That's it! You now have a secure, auto-resizing iframe with built-in origin vali
 }
 ```
 
-## Next Steps
-
-**Congratulations!** You've successfully set up BlazorFrame. Here's what to explore next:
-
-### Learn More
-- [**Basic Usage**](basic-usage.md) - Explore all basic features
-- [**Security Features**](../security/overview.md) - Understand security capabilities
-- [**Configuration**](../configuration/security-options.md) - Deep dive into configuration options
-
-### Security Features (New in v2.1)
-- [**Sandbox Attributes**](../security/sandbox.md) - Iframe content isolation
-- [**HTTPS Enforcement**](../security/https-enforcement.md) - Transport security
-- [**Configuration Validation**](../security/configuration-validation.md) - Real-time validation
-
-### Examples
-- [**Common Scenarios**](../examples/common-scenarios.md) - Real-world examples
-- [**Payment Widgets**](../examples/payment-widgets.md) - High-security integration
-- [**Third-Party Widgets**](../examples/third-party-widgets.md) - External widget integration
-
-### Advanced Topics
-- [**CSP Integration**](../csp/overview.md) - Content Security Policy
-- [**Custom Validation**](../advanced/custom-validation.md) - Custom security validators
-- [**Performance Optimization**](../advanced/performance.md) - Optimize performance
-
----
-
 ## Common Issues
 
 ### Cross-Origin Issues

@@ -349,9 +349,3 @@ The new approach provides:
 - **Fluent API** for easy chaining
 
 ---
-
-**Related Topics:**
-- [Security Overview](overview.md) - Complete security feature overview
-- [Configuration Validation](configuration-validation.md) - Real-time validation
-- [HTTPS Enforcement](https-enforcement.md) - Transport security
-- [MessageSecurityOptions API](../api/message-security-options.md) - Complete API reference

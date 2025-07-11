@@ -27,9 +27,9 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 
 - [Configuration Guide](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration) 
 
-- [Real-world Examples](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/examples)
+- [Real-world Examples](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/examples/common-scenarios.md)
 
-- [API Reference](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/api)
+- [API Reference](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/api/message-security-options.md)
 
 - [Troubleshooting](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/advanced/troubleshooting.md)
 

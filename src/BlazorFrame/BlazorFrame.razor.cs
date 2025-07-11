@@ -74,6 +74,39 @@ public partial class BlazorFrame : IAsyncDisposable
         : "iframe-wrapper";
 
     /// <summary>
+    /// Gets the effective sandbox attribute value based on security options configuration
+    /// </summary>
+    private string? EffectiveSandboxValue => SecurityOptions.GetEffectiveSandboxValue();
+
+    /// <summary>
+    /// Gets combined iframe attributes including sandbox and additional attributes
+    /// </summary>
+    private Dictionary<string, object> IframeAttributes
+    {
+        get
+        {
+            var attributes = new Dictionary<string, object>(AdditionalAttributes);
+            
+            // Add sandbox attribute only if it has a value
+            var sandboxValue = EffectiveSandboxValue;
+            if (!string.IsNullOrEmpty(sandboxValue))
+            {
+                // User's AdditionalAttributes sandbox takes precedence over computed value
+                if (!attributes.ContainsKey("sandbox"))
+                {
+                    attributes["sandbox"] = sandboxValue;
+                }
+                else
+                {
+                    Logger?.LogWarning("BlazorFrame: sandbox attribute in AdditionalAttributes overrides SecurityOptions sandbox configuration");
+                }
+            }
+            
+            return attributes;
+        }
+    }
+
+    /// <summary>
     /// Gets the recommended CSP header for the current configuration
     /// </summary>
     /// <returns>CSP header or null if CSP is not configured</returns>
@@ -111,6 +144,94 @@ public partial class BlazorFrame : IAsyncDisposable
     {
         base.OnParametersSet();
         UpdateAllowedOrigins();
+        ValidateConfiguration();
+        ValidateSrcUrl();
+    }
+
+    private void ValidateConfiguration()
+    {
+        try
+        {
+            var validationResult = SecurityOptions.ValidateConfiguration();
+            
+            foreach (var error in validationResult.Errors)
+            {
+                Logger?.LogError("BlazorFrame configuration error: {Error}", error);
+            }
+            
+            foreach (var warning in validationResult.Warnings)
+            {
+                Logger?.LogWarning("BlazorFrame configuration warning: {Warning}", warning);
+            }
+            
+            foreach (var suggestion in validationResult.Suggestions)
+            {
+                Logger?.LogDebug("BlazorFrame configuration suggestion: {Suggestion}", suggestion);
+            }
+            
+            if (!validationResult.IsValid)
+            {
+                var errorMessage = string.Join("; ", validationResult.Errors);
+                var violationMessage = new IframeMessage
+                {
+                    Origin = "configuration",
+                    Data = $"Configuration validation failed: {errorMessage}",
+                    IsValid = false,
+                    ValidationError = errorMessage,
+                    MessageType = "configuration-validation"
+                };
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await OnSecurityViolation.InvokeAsync(violationMessage);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.LogError(ex, "Error invoking security violation callback for configuration validation");
+                    }
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Error validating BlazorFrame configuration");
+        }
+    }
+
+    private void ValidateSrcUrl()
+    {
+        if (string.IsNullOrEmpty(Src))
+            return;
+
+        var urlValidation = validationService.ValidateUrl(Src, SecurityOptions);
+        if (!urlValidation.IsValid)
+        {
+            Logger?.LogWarning("BlazorFrame Src URL validation failed: {Error}. URL: {Src}", 
+                urlValidation.ErrorMessage, Src);
+
+            var violationMessage = new IframeMessage
+            {
+                Origin = Src,
+                Data = $"URL validation failed: {urlValidation.ErrorMessage}",
+                IsValid = false,
+                ValidationError = urlValidation.ErrorMessage,
+                MessageType = "url-validation"
+            };
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await OnSecurityViolation.InvokeAsync(violationMessage);
+                }
+                catch (Exception ex)
+                {
+                    Logger?.LogError(ex, "Error invoking security violation callback for URL validation");
+                }
+            });
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

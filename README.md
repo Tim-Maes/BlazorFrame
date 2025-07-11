@@ -1,482 +1,163 @@
 # BlazorFrame
 
-A Blazor component that provides an enhanced iframe wrapper with automatic resizing, cross-frame communication, and seamless JavaScript interop with built-in security features.
+A security-first Blazor iframe component with automatic resizing, cross-frame messaging, and comprehensive Content Security Policy integration.
+
+[![NuGet](https://img.shields.io/nuget/v/BlazorFrame.svg)](https://www.nuget.org/packages/BlazorFrame)
+[![Downloads](https://img.shields.io/nuget/dt/BlazorFrame.svg)](https://www.nuget.org/packages/BlazorFrame)
+[![GitHub](https://img.shields.io/github/license/Tim-Maes/BlazorFrame.svg)](https://github.com/Tim-Maes/BlazorFrame/blob/main/LICENSE.txt)
 
 ## Features
 
-- **Security-First Design** - Origin validation, message filtering, and comprehensive security options
-- **Content Security Policy Integration** - Built-in CSP helpers for iframe security
-- **Responsive** - Dynamically resizes iframe based on content height (can be enabled/disabled)
-- **Cross-Frame Messaging** - Built-in support for postMessage communication with validation
-- **Event Callbacks** - OnLoad, OnMessage, and security event handling
-- **Flexible Styling** - Customizable width, height, and additional attributes
-- **JavaScript Interop** - Seamless integration with Blazor's JS interop
-- **Scrolling Control** - Enable or disable scrolling within the iframe wrapper
-- **Disposal Pattern** - Proper cleanup of resources and event listeners
+- **Security-First Design** - Built-in origin validation, message filtering, and sandbox isolation
+- **Content Security Policy** - Comprehensive CSP integration with fluent configuration API
+- **Cross-Frame Messaging** - Secure postMessage communication with validation
+- **Sandbox Support** - Multiple security levels from permissive to paranoid isolation
+- **Environment-Aware** - Different configurations for development vs production
+- **Automatic Resizing** - Smart height adjustment based on iframe content
 
-## Installation
+## Documentation
 
-Install the package via NuGet Package Manager:
+**[Complete Documentation](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs)**
 
-```
+- [Quick Start Guide](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/getting-started/quick-start.md)
+- [Security Features](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/security)
+- [Configuration Guide](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/configuration)  
+- [Real-world Examples](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/examples)
+- [API Reference](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/api)
+- [Troubleshooting](https://github.com/Tim-Maes/BlazorFrame/tree/main/docs/advanced/troubleshooting.md)
+
+## :rocket: Quick Start
+
+### Installation
+
+```bash
 dotnet add package BlazorFrame
 ```
-Or via Package Manager Console:
 
-```
-Install-Package BlazorFrame
-```
-
-## Quick Start (Secure by Default)
+### Basic Usage
 
 ```razor
 @using BlazorFrame
 
+<!-- Simple iframe with automatic security -->
 <BlazorFrame Src="https://example.com" />
-```
 
-The component automatically derives allowed origins from the `Src` URL for secure messaging.
-
-## Usage Examples
-
-### Basic Usage with Event Handling
-
-```razor
-@using BlazorFrame
-
-<BlazorFrame Src="@iframeUrl"
-            Width="100%"
-            Height="400px"
-            EnableAutoResize="true"
-            EnableScroll="false"
-            OnLoad="HandleIframeLoad"
-            OnValidatedMessage="HandleValidatedMessage"
-            OnSecurityViolation="HandleSecurityViolation"
-            class="my-custom-iframe" />
+<!-- Production-ready configuration -->
+<BlazorFrame Src="https://widget.example.com"
+            SecurityOptions="@securityOptions"
+            OnValidatedMessage="HandleMessage"
+            OnSecurityViolation="HandleViolation" />
 
 @code {
-    private string iframeUrl = "https://example.com";
-
-    private Task HandleIframeLoad()
+    private readonly MessageSecurityOptions securityOptions = new MessageSecurityOptions()
+        .ForProduction()        // Strict security settings
+        .WithBasicSandbox()     // Enable iframe sandboxing
+        .RequireHttps();        // Enforce HTTPS transport
+        
+    private Task HandleMessage(IframeMessage message)
     {
-        Console.WriteLine("Iframe loaded successfully!");
+        Console.WriteLine($"Received message from {message.Origin}: {message.Data}");
         return Task.CompletedTask;
     }
 
-    private Task HandleValidatedMessage(IframeMessage message)
-    {
-        Console.WriteLine($"Secure message from {message.Origin}: {message.Data}");
-        return Task.CompletedTask;
-    }
-
-    private Task HandleSecurityViolation(IframeMessage violation)
+    private Task HandleViolation(IframeMessage violation)
     {
         Console.WriteLine($"Security violation: {violation.ValidationError}");
         return Task.CompletedTask;
-    }
-}
-```
-
-### Advanced Security Configuration
-
-```razor
-@using BlazorFrame
-
-<BlazorFrame Src="@iframeUrl"
-            AllowedOrigins="@allowedOrigins"
-            SecurityOptions="@securityOptions"
-            OnValidatedMessage="HandleValidatedMessage"
-            OnSecurityViolation="HandleSecurityViolation" />
-
-@code {
-    private string iframeUrl = "https://widget.example.com";
-    
-    private List<string> allowedOrigins = new() 
-    { 
-        "https://widget.example.com", 
-        "https://api.example.com" 
     };
-    
-    private MessageSecurityOptions securityOptions = new()
-    {
-        EnableStrictValidation = true,
-        MaxMessageSize = 32 * 1024, // 32KB
-        LogSecurityViolations = true
-    };
-
-    private Task HandleValidatedMessage(IframeMessage message)
-    {
-        // Handle validated, secure messages
-        return Task.CompletedTask;
-    }
-
-    private Task HandleSecurityViolation(IframeMessage violation)
-    {
-        // Log, alert, or take corrective action
-        Logger.LogWarning("Security violation: {Error}", violation.ValidationError);
-        return Task.CompletedTask;
-    }
 }
 ```
 
-### Content Security Policy Integration
-
-```razor
-@using BlazorFrame
-
-<BlazorFrame Src="@iframeUrl"
-            CspOptions="@cspOptions"
-            OnCspHeaderGenerated="HandleCspGenerated"
-            OnValidatedMessage="HandleValidatedMessage" />
-
-@code {
-    private string iframeUrl = "https://widget.example.com";
-    
-    private CspOptions cspOptions = new CspOptions()
-        .AllowSelf()
-        .AllowFrameSources("https://widget.example.com", "https://trusted-cdn.com")
-        .AllowHttpsFrames()
-        .WithCustomDirective("img-src", "'self'", "data:", "https:");
-
-    private Task HandleCspGenerated(CspHeader cspHeader)
-    {
-        // Apply CSP header to your response
-        Console.WriteLine($"Generated CSP: {cspHeader.HeaderValue}");
-        
-        // In a real application, you might apply this to the HTTP response:
-        // HttpContext.Response.Headers.Add(cspHeader.HeaderName, cspHeader.HeaderValue);
-        
-        return Task.CompletedTask;
-    }
-
-    private Task HandleValidatedMessage(IframeMessage message)
-    {
-        // Handle validated messages
-        return Task.CompletedTask;
-    }
-}
-```
-
-## Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `Src` | `string` | `""` | The URL to load in the iframe |
-| `Width` | `string` | `"100%"` | The width of the iframe |
-| `CspOptions` | `CspOptions?` | `null` | Content Security Policy configuration options |
-| `Height` | `string` | `"600px"` | The initial height of the iframe |
-| `EnableAutoResize` | `bool` | `true` | Whether to automatically resize the iframe based on content height |
-| `EnableScroll` | `bool` | `false` | Whether to enable scrolling within the iframe wrapper |
-| `AllowedOrigins` | `List<string>?` | `null` | Explicit list of allowed origins. If null, auto-derives from Src |
-| `SecurityOptions` | `MessageSecurityOptions` | `new()` | Security configuration options |
-| `OnCspHeaderGenerated` | `EventCallback<CspHeader>` | - | Callback fired when CSP header is generated |
-| `OnLoad` | `EventCallback` | - | Callback fired when the iframe loads |
-| `OnMessage` | `EventCallback<string>` | - | Callback fired when receiving valid postMessage (legacy) |
-| `OnValidatedMessage` | `EventCallback<IframeMessage>` | - | Callback fired with full message validation details |
-| `OnSecurityViolation` | `EventCallback<IframeMessage>` | - | Callback fired when security violations occur |
-| `AdditionalAttributes` | `Dictionary<string, object>` | - | Additional HTML attributes to apply |
-
-## Security Features
-
-### Origin Validation
-
-BlazorFrame automatically validates message origins to prevent unauthorized communication:
-
-- **Auto-derived origins**: Automatically allows messages from the iframe's source domain
-- **Explicit allowlist**: Override with custom allowed origins for multi-domain scenarios
-- **Protocol enforcement**: Ensures HTTPS origins when possible
-
-### Message Validation
-
-All incoming messages are validated before reaching your application:
+### Configuration Examples
 
 ```csharp
-public class MessageSecurityOptions
-{
-    /// <summary>List of allowed origins (null = auto-derive from Src)</summary>
-    public List<string>? AllowedOrigins { get; set; }
-    
-    /// <summary>Enable strict JSON format validation</summary>
-    public bool EnableStrictValidation { get; set; } = true;
-    
-    /// <summary>Maximum message size (default: 64KB)</summary>
-    public int MaxMessageSize { get; set; } = 64 * 1024;
-    
-    /// <summary>Log security violations</summary>
-    public bool LogSecurityViolations { get; set; } = true;
-}
-```
+// Development environment - relaxed security
+var devOptions = new MessageSecurityOptions()
+    .ForDevelopment()
+    .WithPermissiveSandbox();
 
-### Validated Message Model
-
-```csharp
-public class IframeMessage
-{
-    public required string Origin { get; init; }        // Verified sender origin
-    public required string Data { get; init; }          // Validated JSON string
-    public bool IsValid { get; init; }                  // Security validation result
-    public string? ValidationError { get; init; }       // Error details (if any)
-    public string? MessageType { get; init; }           // Extracted message type
-}
-```
-
-### Content Security Policy (CSP)
-
-BlazorFrame includes comprehensive CSP support to enhance iframe security:
-
-```csharp
-@using BlazorFrame
-
-// Create CSP options with fluent API
-var cspOptions = new CspOptions()
-    .AllowSelf()
-    .AllowFrameSources("https://trusted-domain.com")
-    .AllowHttpsFrames()
-    .WithScriptNonce("abc123")
-    .ForProduction();
-
-// Get CSP header for your HTTP response
-var cspHeader = blazorFrame.GetRecommendedCspHeader();
-```
-
-#### CSP Configuration Examples
-
-```csharp
-// Development environment (relaxed security)
-var devCsp = new CspOptions().ForDevelopment();
-
-// Production environment (strict security)
-var prodCsp = new CspOptions()
+// Production environment - strict security
+var prodOptions = new MessageSecurityOptions()
     .ForProduction()
-    .AllowFrameSources("https://trusted-widget.com")
-    .WithScriptNonce(nonceValue);
+    .WithStrictSandbox()
+    .ValidateAndThrow();
 
-// Custom configuration
-var customCsp = new CspOptions()
-    .AllowSelf()
-    .AllowFrameSources("https://widget.example.com", "https://cdn.example.com")
-    .AllowDataUrls()
-    .WithCustomDirective("img-src", "'self'", "data:", "https:")
-    .AsReportOnly("https://csp-report.example.com/report");
+// Payment widgets - maximum security
+var paymentOptions = new MessageSecurityOptions()
+    .ForPaymentWidget();
 ```
 
-#### CSP Helper Methods
-
-```csharp
-// Generate CSP meta tag for HTML
-var metaTag = cspBuilder.BuildCspMetaTag(cspOptions);
-
-// Generate JavaScript to set CSP dynamically
-var jsCode = cspBuilder.BuildCspJavaScript(cspOptions);
-
-// Validate CSP configuration
-var validation = cspBuilder.ValidateCspOptions(cspOptions);
-foreach (var warning in validation.Warnings)
-{
-    Console.WriteLine($"CSP Warning: {warning}");
-}
-```
-
-### Security Event Handling
-
-Monitor and respond to security events:
+### Content Security Policy
 
 ```razor
-<BlazorFrame OnSecurityViolation="HandleViolation" />
-
-@code {
-    private Task HandleViolation(IframeMessage violation)
-    {
-        // Log, alert, or take corrective action
-        Logger.LogWarning("Security violation: {Error}", violation.ValidationError);
-        return Task.CompletedTask;
-    }
-}
-```
-
-## Automatic Resizing
-
-BlazorFrame can automatically adjust the iframe height based on the content inside when `EnableAutoResize` is set to `true` (default). The component:
-
-1. Monitors the iframe content document every 500ms
-2. Calculates the maximum height from various document properties
-3. Updates the iframe height dynamically
-4. Handles cross-origin restrictions gracefully
-5. Can be disabled by setting `EnableAutoResize="false"`
-
-## Cross-Frame Communication
-
-### Sending Messages from Iframe (Secure)
-
-```javascript
-// Inside your iframe content - specify target origin for security
-window.parent.postMessage({ 
-    type: 'custom', 
-    data: 'Hello from iframe!' 
-}, 'https://your-parent-domain.com');
-```
-
-### Special Resize Messages
-
-```javascript
-// Send resize messages (validated automatically)
-window.parent.postMessage({ 
-    type: 'resize', 
-    height: 800 
-}, 'https://your-parent-domain.com');
-```
-
-### Receiving Validated Messages
-
-```csharp
-private Task HandleValidatedMessage(IframeMessage message)
-{
-    // message.Origin - verified sender origin
-    // message.Data - validated JSON string
-    // message.MessageType - extracted message type (if present)
-    // message.IsValid - always true in this callback
-    
-    return Task.CompletedTask;
-}
-```
-
-## Styling and CSS
-
-The component includes built-in CSS styling with wrapper classes:
-
-- **iframe-wrapper** - Applied to all iframe wrappers
-- **iframe-wrapper scrollable** - Applied when `EnableScroll="true"`
-
-The wrapper provides:
-
-- 100% width by default
-- Hidden overflow (unless scrollable)
-- Borderless iframe display
-
-## Examples
-
-### Loading Different Content Types
-
-```razor
-<!-- Web pages -->
-<BlazorFrame Src="https://docs.microsoft.com" />
-
-<!-- Local HTML files -->
-<BlazorFrame Src="./local-content.html" />
-
-<!-- Data URLs -->
-<BlazorFrame Src="data:text/html,<h1>Hello World!</h1>" />
-### Multi-Domain Setup
 <BlazorFrame Src="https://widget.example.com"
-            AllowedOrigins="@(new List<string> 
-            { 
-                "https://widget.example.com", 
-                "https://api.example.com" 
-            })" />
-```
-
-### High-Security Configuration with CSP
-
-```razor
-@using BlazorFrame
-
-<BlazorFrame Src="@secureUrl"
-            SecurityOptions="@securityOptions"
             CspOptions="@cspOptions"
-            OnSecurityViolation="HandleViolation"
             OnCspHeaderGenerated="HandleCspGenerated" />
 
 @code {
-    private string secureUrl = "https://secure-widget.com";
-    
-    private MessageSecurityOptions securityOptions = new()
-    {
-        EnableStrictValidation = true,
-        MaxMessageSize = 16 * 1024, // 16KB limit
-        LogSecurityViolations = true
-    };
-    
-    private CspOptions cspOptions = new CspOptions()
+    private readonly CspOptions cspOptions = new CspOptions()
         .ForProduction()
-        .AllowFrameSources("https://secure-widget.com")
-        .WithScriptNonce("secure-nonce-123")
-        .WithCustomDirective("connect-src", "'self'", "https://api.secure-widget.com");
+        .AllowFrameSources("https://widget.example.com")
+        .WithScriptNonce("secure-nonce-123");
+        
+    private Task HandleCspGenerated(CspHeader cspHeader)
+    {
+        // Apply CSP header to HTTP response
+        // HttpContext.Response.Headers.Add(cspHeader.HeaderName, cspHeader.HeaderValue);
+        return Task.CompletedTask;
+    }
 }
 ```
 
-### Responsive Design
+## Security Features
 
-```razor
-<div class="container-fluid">
-    <BlazorFrame Src="@contentUrl"
-                Width="100%"
-                Height="calc(100vh - 200px)"
-                EnableAutoResize="false"
-                style="min-height: 400px;" />
-</div>
-```
+### Sandbox Security Levels
 
-### Disabling Auto-Resize for Fixed Height
+| Level | Description | Use Case |
+|-------|-------------|----------|
+| **None** | No restrictions | Trusted content only |
+| **Basic** | Scripts + same-origin | Most trusted widgets |
+| **Permissive** | + forms + popups | Interactive widgets |
+| **Strict** | Scripts + same-origin only | Display widgets |
+| **Paranoid** | Scripts only | Untrusted content |
 
-```razor
-<BlazorFrame Src="@contentUrl"
-            Width="100%"
-            Height="500px"
-            EnableAutoResize="false"
-            EnableScroll="true" />
-```
+### Message Validation
 
-### Custom Styling and Attributes
-
-```razor
-<BlazorFrame Src="@iframeUrl"
-            Width="800px"
-            Height="600px"
-            EnableAutoResize="false"
-            EnableScroll="true"
-            class="border rounded shadow"
-            style="margin: 20px;"
-            sandbox="allow-scripts allow-same-origin" />
-```
-
-## Best Practices
-
-1. **Always specify target origin** when sending messages from iframe content
-2. **Use OnValidatedMessage** for new implementations instead of legacy OnMessage
-3. **Monitor security violations** in production environments
-4. **Set appropriate MaxMessageSize** based on your use case
-5. **Enable logging** for security auditing
-6. **Use HTTPS** for iframe sources when possible
-7. **Implement proper error handling** for security violations
+All iframe messages are automatically validated for:
+- **Origin verification** - Ensures messages come from allowed domains
+- **Content validation** - JSON structure and size limits
+- **Security filtering** - Blocks malicious patterns and script injection
+- **Custom validation** - Extensible validation pipeline
 
 ## Demo
 
-Click the image to go to the demo project, which has various BlazorFrame iframes with different configurations.
+[![BlazorFrame Demo](https://github.com/user-attachments/assets/106e02f8-5b7a-4a02-9748-b5fc1f540168)](https://github.com/Tim-Maes/BlazorFrameDemo)
 
-[![BlazorFrameDemo](https://github.com/user-attachments/assets/106e02f8-5b7a-4a02-9748-b5fc1f540168)](https://www.github.com/Tim-Maes/BlazorFrameDemo)
+**[Interactive Demo](https://github.com/Tim-Maes/BlazorFrameDemo)** - Try different security configurations live
 
 ## Requirements
 
-- .NET 8.0 or later
-- Blazor Server or Blazor WebAssembly
+- **.NET 8.0** or later
+- **Blazor Server** or **Blazor WebAssembly**
+- Modern browser with ES6 modules support
 
 ## Browser Support
 
-BlazorFrame works in all modern browsers that support:
-
-- ES6 modules
-- postMessage API with origin validation
-- Blazor JavaScript interop
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt) file for details.
+- Chrome 91+
+- Firefox 90+  
+- Safari 15+
+- Edge 91+
 
 ## Support
 
-If you encounter any issues or have questions:
+- **Issues**: [GitHub Issues](https://github.com/Tim-Maes/BlazorFrame/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Tim-Maes/BlazorFrame/discussions)  
+- **NuGet**: [BlazorFrame Package](https://www.nuget.org/packages/BlazorFrame)
 
-- [Open an issue](https://github.com/Tim-Maes/BlazorFrame/issues) on GitHub
-- Check existing issues for solutions
-- Suggest new features or improvements
-- 
+## License
+
+This project is licensed under the [MIT License](LICENSE.txt).
+
+---
+
+**Built with :heart: for the Blazor community**

@@ -1,6 +1,6 @@
 # Configuration Guide
 
-**Complete configuration reference for BlazorFrame v2.1**
+**Complete configuration reference for BlazorFrame**
 
 BlazorFrame provides extensive configuration options for security, behavior, and appearance. This guide covers all configuration aspects from basic setup to advanced security scenarios.
 

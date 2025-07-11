@@ -5,6 +5,8 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 [![NuGet](https://img.shields.io/nuget/v/BlazorFrame.svg)](https://www.nuget.org/packages/BlazorFrame)
 [![Downloads](https://img.shields.io/nuget/dt/BlazorFrame.svg)](https://www.nuget.org/packages/BlazorFrame)
 [![GitHub](https://img.shields.io/github/license/Tim-Maes/BlazorFrame.svg)](https://github.com/Tim-Maes/BlazorFrame/blob/main/LICENSE.txt)
+[![CI](https://github.com/Tim-Maes/BlazorFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/Tim-Maes/BlazorFrame/actions/workflows/ci.yml)
+[![CD](https://github.com/Tim-Maes/BlazorFrame/actions/workflows/cd.yml/badge.svg)](https://github.com/Tim-Maes/BlazorFrame/actions/workflows/cd.yml)
 
 ## Features
 

@@ -1,15 +1,7 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: publish
+name: CD
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - 'main'
-      - 'master'
-  pull_request:
-    branches:
-      - '*'
   release:
     types:
       - published
@@ -24,7 +16,7 @@ defaults:
     shell: pwsh
 
 jobs:
-  create_nuget:
+  publish-nuget:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,32 +37,17 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build --verbosity normal
 
-      - name: Pack NuGet Packages
+      - name: Pack NuGet Package
         run: dotnet pack src/BlazorFrame/BlazorFrame.csproj --configuration Release --output ${{ env.NuGetDirectory }} --no-build
 
       - uses: actions/upload-artifact@v4
         with:
-          name: nuget
+          name: nuget-package
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
           path: ${{ env.NuGetDirectory }}/*.nupkg
 
-  deploy:
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    needs: [ create_nuget ]
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: nuget
-          path: ${{ env.NuGetDirectory }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Publish NuGet package
+      - name: Publish to NuGet
         run: |
           foreach ($file in Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg) {
             if ($file.Name -like "BlazorFrame.*.nupkg") {
@@ -81,3 +58,13 @@ jobs:
                 --skip-duplicate
             }
           }
+
+      - name: Create GitHub Release Asset
+        run: |
+          foreach ($file in Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg) {
+            if ($file.Name -like "BlazorFrame.*.nupkg") {
+              gh release upload ${{ github.event.release.tag_name }} $file
+            }
+          }
+        env:
+          GH_TOKEN: ${{ github.token }}

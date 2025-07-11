@@ -19,12 +19,14 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 
 **[Complete Documentation](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs)**
 
-- [Quick Start Guide](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/getting-started/quick-start.md)
-- [Security Features](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/security)
-- [Configuration Guide](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration)  
-- [Real-world Examples](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/examples)
-- [API Reference](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/api)
-- [Troubleshooting](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/advanced/troubleshooting.md)
+[Quick Start Guide](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/getting-started/quick-start.md)
+[Security Features](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/security)
+- [Configuration Validation](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/security/configuration-validation.md)
+- [Sandbox](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/security/sandbox.md)
+[Configuration Guide](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration)  
+[Real-world Examples](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/examples)
+[API Reference](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/api)
+[Troubleshooting](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/advanced/troubleshooting.md)
 
 ## :rocket: Quick Start
 

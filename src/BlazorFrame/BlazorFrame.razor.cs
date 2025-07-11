@@ -87,11 +87,9 @@ public partial class BlazorFrame : IAsyncDisposable
         {
             var attributes = new Dictionary<string, object>(AdditionalAttributes);
             
-            // Add sandbox attribute only if it has a value
             var sandboxValue = EffectiveSandboxValue;
             if (!string.IsNullOrEmpty(sandboxValue))
             {
-                // User's AdditionalAttributes sandbox takes precedence over computed value
                 if (!attributes.ContainsKey("sandbox"))
                 {
                     attributes["sandbox"] = sandboxValue;

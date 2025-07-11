@@ -154,25 +154,21 @@ public partial class BlazorFrame : IAsyncDisposable
         {
             var validationResult = SecurityOptions.ValidateConfiguration();
             
-            // Log configuration errors
             foreach (var error in validationResult.Errors)
             {
                 Logger?.LogError("BlazorFrame configuration error: {Error}", error);
             }
             
-            // Log configuration warnings
             foreach (var warning in validationResult.Warnings)
             {
                 Logger?.LogWarning("BlazorFrame configuration warning: {Warning}", warning);
             }
             
-            // Log configuration suggestions in debug level
             foreach (var suggestion in validationResult.Suggestions)
             {
                 Logger?.LogDebug("BlazorFrame configuration suggestion: {Suggestion}", suggestion);
             }
             
-            // Fire security violation for configuration errors
             if (!validationResult.IsValid)
             {
                 var errorMessage = string.Join("; ", validationResult.Errors);
@@ -185,7 +181,6 @@ public partial class BlazorFrame : IAsyncDisposable
                     MessageType = "configuration-validation"
                 };
 
-                // Fire security violation event asynchronously
                 _ = Task.Run(async () =>
                 {
                     try
@@ -216,7 +211,6 @@ public partial class BlazorFrame : IAsyncDisposable
             Logger?.LogWarning("BlazorFrame Src URL validation failed: {Error}. URL: {Src}", 
                 urlValidation.ErrorMessage, Src);
 
-            // Create a security violation for URL validation failure
             var violationMessage = new IframeMessage
             {
                 Origin = Src,
@@ -226,7 +220,6 @@ public partial class BlazorFrame : IAsyncDisposable
                 MessageType = "url-validation"
             };
 
-            // Fire security violation event asynchronously
             _ = Task.Run(async () =>
             {
                 try

@@ -97,8 +97,9 @@ public static class MessageSecurityExtensions
         options.EnableStrictValidation = false;
         options.LogSecurityViolations = true;
         options.AllowInsecureConnections = true;
-        options.RequireHttps = false;
+        options.RequireHttps = false; // Clear HTTPS requirement for development
         options.SandboxPreset = SandboxPreset.Permissive;
+        options.EnableSandbox = true; // Enable sandbox for safety
         options.MaxMessageSize = 128 * 1024; // 128KB for development
         return options;
     }
@@ -112,9 +113,10 @@ public static class MessageSecurityExtensions
     {
         options.EnableStrictValidation = true;
         options.LogSecurityViolations = true;
-        options.AllowInsecureConnections = false;
+        options.AllowInsecureConnections = false; // No insecure connections in production
         options.RequireHttps = true;
         options.SandboxPreset = SandboxPreset.Strict;
+        options.EnableSandbox = true; // Always enable sandbox in production
         options.MaxMessageSize = 32 * 1024; // 32KB for production
         options.AllowScriptProtocols = false;
         return options;
@@ -130,7 +132,7 @@ public static class MessageSecurityExtensions
         return options
             .ForProduction()
             .WithStrictSandbox()
-            .RequireHttps(false);
+            .RequireHttps(allowInsecureInDevelopment: false); // Never allow insecure for payments
     }
 
     /// <summary>
@@ -142,9 +144,37 @@ public static class MessageSecurityExtensions
     {
         options.EnableStrictValidation = true;
         options.SandboxPreset = SandboxPreset.Basic;
+        options.EnableSandbox = true;
         options.RequireHttps = true;
         options.AllowInsecureConnections = false;
         options.MaxMessageSize = 64 * 1024; // 64KB
+        return options;
+    }
+
+    /// <summary>
+    /// Validates the configuration and returns validation result
+    /// </summary>
+    /// <param name="options">Security options to validate</param>
+    /// <returns>Configuration validation result</returns>
+    public static ConfigurationValidationResult Validate(this MessageSecurityOptions options)
+    {
+        return options.ValidateConfiguration();
+    }
+
+    /// <summary>
+    /// Validates the configuration and throws an exception if there are errors
+    /// </summary>
+    /// <param name="options">Security options to validate</param>
+    /// <returns>The same options for chaining</returns>
+    /// <exception cref="InvalidOperationException">Thrown when configuration has errors</exception>
+    public static MessageSecurityOptions ValidateAndThrow(this MessageSecurityOptions options)
+    {
+        var validation = options.ValidateConfiguration();
+        if (!validation.IsValid)
+        {
+            var errors = string.Join("; ", validation.Errors);
+            throw new InvalidOperationException($"MessageSecurityOptions configuration is invalid: {errors}");
+        }
         return options;
     }
 }

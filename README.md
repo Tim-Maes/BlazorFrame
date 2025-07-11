@@ -116,7 +116,24 @@ var paymentOptions = new MessageSecurityOptions()
 }
 ```
 
-## Security Features
+## Security
+
+### Content Security Policy
+
+Comprehensive CSP integration for defense-in-depth security:
+- **Automatic header generation** - CSP headers built from iframe requirements
+- **Environment-aware policies** - Different rules for development vs production
+- **Fluent configuration API** - Easy-to-use builder pattern for CSP rules
+- **Violation monitoring** - Real-time CSP violation reporting and analysis
+- **Nonce and hash support** - Modern CSP techniques for script security
+
+### Message Validation
+
+All iframe messages are automatically validated for:
+- **Origin verification** - Ensures messages come from allowed domains
+- **Content validation** - JSON structure and size limits
+- **Security filtering** - Blocks malicious patterns and script injection
+- **Custom validation** - Extensible validation pipeline
 
 ### Sandbox Security Levels
 
@@ -127,14 +144,6 @@ var paymentOptions = new MessageSecurityOptions()
 | **Permissive** | + forms + popups | Interactive widgets |
 | **Strict** | Scripts + same-origin only | Display widgets |
 | **Paranoid** | Scripts only | Untrusted content |
-
-### Message Validation
-
-All iframe messages are automatically validated for:
-- **Origin verification** - Ensures messages come from allowed domains
-- **Content validation** - JSON structure and size limits
-- **Security filtering** - Blocks malicious patterns and script injection
-- **Custom validation** - Extensible validation pipeline
 
 ## Demo
 

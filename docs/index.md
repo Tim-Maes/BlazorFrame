@@ -7,6 +7,14 @@ Welcome to the comprehensive documentation for **BlazorFrame** - the enhanced, s
 ### Getting Started
 - [**Quick Start**](getting-started/quick-start.md) - Get up and running in minutes
 
+### Configuration
+- [**Configuration Guide**](configuration/index.md) - Complete configuration reference (New!)
+  - [Security Configuration](configuration/security-options.md) - Security settings and presets
+  - [Display Configuration](configuration/display-options.md) - Visual presentation options
+  - [Communication Configuration](configuration/communication-options.md) - Cross-frame messaging
+  - [CSP Configuration](configuration/csp-configuration.md) - Content Security Policy
+  - [Advanced Configuration](configuration/advanced-options.md) - Performance and enterprise features
+
 ### Core Features  
 - [**Component Parameters**](core-features/parameters.md) - Complete parameter reference
 
@@ -51,13 +59,7 @@ BlazorFrame v2.1 introduces powerful new security features:
 Get started with BlazorFrame in under 2 minutes:
 
 # Install the package
-
-```bash
-dotnet add package BlazorFrame@using BlazorFrame
-```
-
-```razor
-<BlazorFrame Src="https://example.com" />
+dotnet add package BlazorFrame@using BlazorFrame<BlazorFrame Src="https://example.com" />
 
 <BlazorFrame Src="https://widget.example.com"
             SecurityOptions="@securityOptions"
@@ -73,8 +75,6 @@ dotnet add package BlazorFrame@using BlazorFrame
     private Task HandleMessage(IframeMessage message) => Task.CompletedTask;
     private Task HandleViolation(IframeMessage violation) => Task.CompletedTask;
 }
-```
-
 ## Core Features Overview
 
 ### Security-First Design
@@ -117,33 +117,19 @@ Built-in CSP support:
 ## Configuration Examples
 
 ### Development Configuration
-
-```csharp
 var devOptions = new MessageSecurityOptions()
     .ForDevelopment()           // Relaxed security for development
     .WithPermissiveSandbox()    // Allow most iframe interactions
-    .Validate();               // Check configuration but don't throw
-```
-### Production Configuration
-
-```csharp
+    .Validate();               // Check configuration but don't throw### Production Configuration
 var prodOptions = new MessageSecurityOptions()
     .ForProduction()           // Strict security for production
     .WithStrictSandbox()       // Limited iframe permissions
     .ValidateAndThrow();       // Throw on configuration errors
-```
-
 ### Payment Widget Configuration
-
-```csharp
 var paymentOptions = new MessageSecurityOptions()
     .ForPaymentWidget()        // Maximum security preset
     .ValidateAndThrow();       // Critical to validate payment configs
-```
-
 ### Custom Configuration
-
-```csharp
 var customOptions = new MessageSecurityOptions
 {
     EnableStrictValidation = true,
@@ -154,8 +140,6 @@ var customOptions = new MessageSecurityOptions
     AllowInsecureConnections = false,
     LogSecurityViolations = true
 };
-```
-
 ## Browser Support
 
 BlazorFrame works in all modern browsers that support:

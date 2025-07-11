@@ -8,7 +8,7 @@ Welcome to the comprehensive documentation for **BlazorFrame** - the enhanced, s
 - [**Quick Start**](getting-started/quick-start.md) - Get up and running in minutes
 
 ### Configuration
-- [**Configuration Guide**](configuration/index.md) - Complete configuration reference (New!)
+- [**Configuration Guide**](configuration/readme.md) - Complete configuration reference (New!)
   - [Security Configuration](configuration/security-options.md) - Security settings and presets
   - [Display Configuration](configuration/display-options.md) - Visual presentation options
   - [Communication Configuration](configuration/communication-options.md) - Cross-frame messaging

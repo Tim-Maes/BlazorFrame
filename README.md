@@ -20,22 +20,17 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 **[Complete Documentation](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/readme.md)**
 
 - [Quick Start Guide](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/getting-started/quick-start.md)
-
 - [Security Features](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/security)
   - [Configuration Validation](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/security/configuration-validation.md)
   - [Sandbox](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/security/sandbox.md)
-
 - [Configuration Guide](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration/readme.md) 
   - [Display options](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration/display-options.md)
   - [Advanced options](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration/advanced-options.md)
   - [Communication options](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration/communication-options.md)
   - [CSP configuration](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration/csp-configuration.md)
   - [Security options](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/configuration/security-options.md)
-
 - [Real-world Examples](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/examples/common-scenarios.md)
-
 - [API Reference](https://github.com/Tim-Maes/BlazorFrame/blob/master/docs/api/message-security-options.md)
-
 - [Troubleshooting](https://github.com/Tim-Maes/BlazorFrame/tree/master/docs/advanced/troubleshooting.md)
 
 ## :rocket: Quick Start

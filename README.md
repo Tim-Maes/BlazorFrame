@@ -1,6 +1,14 @@
-# BlazorFrame
+<p align="center">
+  <img
+    src="https://github.com/Tim-Maes/BlazorFrame/blob/master/assets/BlazorFrameLogo2.png"
+    alt="BlazorFrame logo"
+    height="300"
+    style="height:auto;"
+  />
+</p>
 
-A security-first Blazor iframe component with automatic resizing, cross-frame messaging, and comprehensive Content Security Policy integration.
+---
+# A security-first enhanced Blazor iframe component.
 
 [![NuGet](https://img.shields.io/nuget/v/BlazorFrame.svg)](https://www.nuget.org/packages/BlazorFrame)
 [![Downloads](https://img.shields.io/nuget/dt/BlazorFrame.svg)](https://www.nuget.org/packages/BlazorFrame)

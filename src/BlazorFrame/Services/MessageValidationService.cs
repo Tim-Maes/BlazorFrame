@@ -115,8 +115,18 @@ internal class MessageValidationService
             // Validate URI scheme
             if (!IsValidScheme(uri.Scheme))
                 return null;
+
+            // Build origin manually to preserve explicit ports (even default ones)
+            var origin = $"{uri.Scheme}://{uri.Host}";
+            
+            // Always include port if it was explicitly specified in the URL
+            // This preserves explicit default ports (443 for HTTPS, 80 for HTTP)
+            if (!uri.IsDefaultPort || url.Contains($":{uri.Port}"))
+            {
+                origin += $":{uri.Port}";
+            }
                 
-            return uri.GetLeftPart(UriPartial.Authority);
+            return origin;
         }
         catch
         {
@@ -164,10 +174,6 @@ internal class MessageValidationService
 
             var uri = new Uri(url);
 
-            // Validate scheme is allowed
-            if (!IsValidScheme(uri.Scheme))
-                return (false, $"URL scheme '{uri.Scheme}' is not allowed. Allowed schemes: http, https, data, blob");
-
             // Check script protocols first (more specific check)
             var scriptProtocols = new[] { "javascript", "vbscript", "livescript" };
             if (scriptProtocols.Contains(uri.Scheme.ToLowerInvariant()))
@@ -177,6 +183,10 @@ internal class MessageValidationService
                 else
                     return (true, null); // Script protocols are explicitly allowed
             }
+
+            // Validate scheme is allowed (after script protocol check)
+            if (!IsValidScheme(uri.Scheme))
+                return (false, $"URL scheme '{uri.Scheme}' is not allowed. Allowed schemes: http, https, data, blob");
 
             // Check HTTPS requirement for HTTP URLs
             if (uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase))

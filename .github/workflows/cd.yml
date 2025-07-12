@@ -58,13 +58,3 @@ jobs:
                 --skip-duplicate
             }
           }
-
-      - name: Create GitHub Release Asset
-        run: |
-          foreach ($file in Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg) {
-            if ($file.Name -like "BlazorFrame.*.nupkg") {
-              gh release upload ${{ github.event.release.tag_name }} $file
-            }
-          }
-        env:
-          GH_TOKEN: ${{ github.token }}

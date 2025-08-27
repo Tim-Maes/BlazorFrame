@@ -1,7 +1,8 @@
-export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = []) {
-    console.log('BlazorFrame: Initializing with origins:', allowedOrigins);
+export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = [], enableNavigation = false) {
+    console.log('BlazorFrame: Initializing with origins:', allowedOrigins, 'navigation:', enableNavigation);
     
     let cleanupFunctions = [];
+    let lastUrl = '';
     
     function isOriginAllowed(origin) {
         if (!allowedOrigins || allowedOrigins.length === 0) {
@@ -11,6 +12,60 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
         return allowedOrigins.some(allowed => 
             allowed.toLowerCase() === origin.toLowerCase()
         );
+    }
+
+    function parseUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            const queryParams = {};
+            
+            // Parse query parameters
+            urlObj.searchParams.forEach((value, key) => {
+                queryParams[key] = value;
+            });
+            
+            return {
+                url: url,
+                pathname: urlObj.pathname,
+                search: urlObj.search || null,
+                hash: urlObj.hash || null,
+                queryParameters: queryParams,
+                origin: urlObj.origin,
+                navigationType: 'unknown'
+            };
+        } catch (error) {
+            console.warn('BlazorFrame: Failed to parse URL:', url, error);
+            return null;
+        }
+    }
+
+    function trackNavigation(navigationType = 'unknown') {
+        if (!enableNavigation) return;
+        
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) {
+                console.debug('BlazorFrame: Cannot access iframe document for navigation tracking (likely cross-origin)');
+                return;
+            }
+            
+            const currentUrl = doc.location.href;
+            if (currentUrl === lastUrl) return;
+            
+            console.log('BlazorFrame: Navigation detected:', currentUrl);
+            lastUrl = currentUrl;
+            
+            const navigationData = parseUrl(currentUrl);
+            if (navigationData) {
+                navigationData.navigationType = navigationType;
+                navigationData.isSameOrigin = isOriginAllowed(navigationData.origin);
+                
+                dotNetHelper.invokeMethodAsync('OnNavigationEvent', navigationData);
+            }
+        } catch (error) {
+            // Cross-origin restrictions prevent access - this is expected
+            console.debug('BlazorFrame: Navigation tracking blocked by CORS policy');
+        }
     }
 
     function onMessage(event) {
@@ -50,8 +105,64 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
             if (event.data?.type === 'resize' && typeof event.data.height === 'number') {
                 dotNetHelper.invokeMethodAsync('Resize', event.data.height);
             }
+            
+            // Handle navigation events sent via postMessage
+            if (event.data?.type === 'navigation' && event.data?.url) {
+                const navigationData = parseUrl(event.data.url);
+                if (navigationData) {
+                    navigationData.navigationType = 'postmessage';
+                    navigationData.isSameOrigin = isOriginAllowed(navigationData.origin);
+                    dotNetHelper.invokeMethodAsync('OnNavigationEvent', navigationData);
+                }
+            }
         } catch (error) {
             console.error('BlazorFrame: Error invoking .NET method:', error);
+        }
+    }
+
+    // Set up navigation tracking
+    if (enableNavigation) {
+        console.log('BlazorFrame: Navigation tracking enabled');
+        
+        // Track initial load
+        iframe.addEventListener('load', () => {
+            trackNavigation('load');
+        });
+        
+        // Try to set up advanced navigation tracking
+        try {
+            iframe.addEventListener('load', () => {
+                try {
+                    const doc = iframe.contentDocument;
+                    if (doc && doc.defaultView) {
+                        const win = doc.defaultView;
+                        
+                        // Track history navigation
+                        win.addEventListener('popstate', () => trackNavigation('popstate'));
+                        win.addEventListener('hashchange', () => trackNavigation('hashchange'));
+                        
+                        // Track programmatic navigation
+                        const originalPushState = win.history.pushState;
+                        const originalReplaceState = win.history.replaceState;
+                        
+                        win.history.pushState = function(...args) {
+                            originalPushState.apply(this, args);
+                            setTimeout(() => trackNavigation('pushstate'), 0);
+                        };
+                        
+                        win.history.replaceState = function(...args) {
+                            originalReplaceState.apply(this, args);
+                            setTimeout(() => trackNavigation('replacestate'), 0);
+                        },
+                        
+                        console.log('BlazorFrame: Advanced navigation tracking set up successfully');
+                    }
+                } catch (error) {
+                    console.debug('BlazorFrame: Advanced navigation tracking not available (cross-origin):', error.message);
+                }
+            });
+        } catch (error) {
+            console.debug('BlazorFrame: Could not set up advanced navigation tracking:', error.message);
         }
     }
 

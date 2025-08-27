@@ -115,6 +115,42 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
             EnableScroll="@(contentHeight > maxHeight)" />
 ```
 
+### EnableNavigationTracking
+**Type:** `bool`  
+**Default:** `false`  
+**Description:** Enable navigation event tracking to capture URL changes with parameters. Only works for same-origin iframes due to browser security restrictions.
+
+```razor
+<!-- Enable navigation tracking -->
+<BlazorFrame Src="https://same-origin.example.com" 
+            EnableNavigationTracking="true"
+            OnNavigation="HandleNavigation"
+            OnUrlChanged="HandleUrlChanged" />
+
+<!-- Conditional navigation tracking -->
+<BlazorFrame Src="@widgetUrl" 
+            EnableNavigationTracking="@IsSameOrigin(widgetUrl)"
+            OnNavigation="HandleNavigation" />
+
+@code {
+    private bool IsSameOrigin(string url) => 
+        new Uri(url).Host == new Uri(NavigationManager.BaseUri).Host;
+        
+    private Task HandleNavigation(NavigationEvent navigation)
+    {
+        Logger.LogInformation("Navigation to {Url} with {ParamCount} parameters", 
+            navigation.Url, navigation.QueryParameters.Count);
+        return Task.CompletedTask;
+    }
+    
+    private Task HandleUrlChanged(string newUrl)
+    {
+        Logger.LogInformation("URL changed to: {Url}", newUrl);
+        return Task.CompletedTask;
+    }
+}
+```
+
 ## Security Parameters
 
 ### AllowedOrigins
@@ -372,6 +408,60 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
     }
 }
 ```
+
+### OnNavigation
+**Type:** `EventCallback<NavigationEvent>`  
+**Description:** Fired when iframe navigation occurs with complete URL details and query parameters.
+
+```razor
+<BlazorFrame Src="https://example.com" 
+            EnableNavigationTracking="true"
+            OnNavigation="HandleNavigation" />
+
+@code {
+    private Task HandleNavigation(NavigationEvent navigation)
+    {
+        Logger.LogInformation("Navigation detected:");
+        Logger.LogInformation("  URL: {Url}", navigation.Url);
+        Logger.LogInformation("  Pathname: {Pathname}", navigation.Pathname);
+        Logger.LogInformation("  Query: {Query}", navigation.Search);
+        Logger.LogInformation("  Hash: {Hash}", navigation.Hash);
+        Logger.LogInformation("  Type: {Type}", navigation.NavigationType);
+        Logger.LogInformation("  Same Origin: {SameOrigin}", navigation.IsSameOrigin);
+        
+        foreach (var param in navigation.QueryParameters)
+        {
+            Logger.LogInformation("  Query Param: {Key} = {Value}", param.Key, param.Value);
+        }
+        
+        return Task.CompletedTask;
+    }
+}
+```
+
+### OnUrlChanged
+**Type:** `EventCallback<string>`  
+**Description:** Fired when URL changes are detected (simpler alternative to OnNavigation).
+
+```razor
+<BlazorFrame Src="https://example.com" 
+            EnableNavigationTracking="true"
+            OnUrlChanged="HandleUrlChanged" />
+
+@code {
+    private Task HandleUrlChanged(string newUrl)
+    {
+        Logger.LogInformation("URL changed to: {Url}", newUrl);
+        
+        // Parse URL manually if needed
+        var uri = new Uri(newUrl);
+        var queryParams = HttpUtility.ParseQueryString(uri.Query);
+        
+        return Task.CompletedTask;
+    }
+}
+```
+
 ## Styling Parameters
 
 ### AdditionalAttributes

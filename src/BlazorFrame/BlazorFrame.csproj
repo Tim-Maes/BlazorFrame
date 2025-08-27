@@ -6,12 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
 	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	  <PackageId>BlazorFrame</PackageId>
-	  <Version>2.2.0</Version>
-	  <Description>A enhanced secure Blazor iFrame component with built-in origin validation, bidirectional messaging, and comprehensive security features.</Description>
+	  <Version>2.3.0</Version>
+	  <Description>A enhanced secure Blazor iFrame component with built-in origin validation, bidirectional messaging, navigation tracking, and comprehensive security features.</Description>
 	  <PackageProjectUrl>https://www.github.com/Tim-Maes/BlazorFrame</PackageProjectUrl>
 	  <PackageReadmeFile>README.md</PackageReadmeFile>
 	  <RepositoryUrl>https://www.github.com/Tim-Maes/BlazorFrame</RepositoryUrl>
-	  <PackageTags>blazor; iframe; wasm; security; postmessage; origin-validation; bidirectional;</PackageTags>
+	  <PackageTags>blazor; iframe; wasm; security; postmessage; origin-validation; bidirectional; navigation;</PackageTags>
 	  <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
 	  <ApplicationIcon>BlazorFrameIcon.ico</ApplicationIcon>
   </PropertyGroup>

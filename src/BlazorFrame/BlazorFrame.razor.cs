@@ -2,6 +2,7 @@
 using Microsoft.JSInterop;
 using Microsoft.Extensions.Logging;
 using BlazorFrame.Services;
+using BlazorFrame.Models;
 using System.Text.Json;
 
 namespace BlazorFrame;
@@ -25,6 +26,12 @@ public partial class BlazorFrame : IAsyncDisposable
     [Parameter] public string Height { get; set; } = "600px";
     [Parameter] public bool EnableAutoResize { get; set; } = true;
     [Parameter] public bool EnableScroll { get; set; } = false;
+
+    /// <summary>
+    /// Enable navigation event tracking to capture URL changes with parameters
+    /// Note: Only works for same-origin iframes due to browser security restrictions
+    /// </summary>
+    [Parameter] public bool EnableNavigationTracking { get; set; } = false;
 
     /// <summary>
     /// List of allowed origins for postMessage communication.
@@ -75,6 +82,16 @@ public partial class BlazorFrame : IAsyncDisposable
     /// Event fired when sending a message to the iframe fails
     /// </summary>
     [Parameter] public EventCallback<Exception> OnMessageSendFailed { get; set; }
+
+    /// <summary>
+    /// Event fired when iframe navigation occurs (only for same-origin iframes)
+    /// </summary>
+    [Parameter] public EventCallback<NavigationEvent> OnNavigation { get; set; }
+
+    /// <summary>
+    /// Event fired when URL changes are detected (includes query parameter changes)
+    /// </summary>
+    [Parameter] public EventCallback<string> OnUrlChanged { get; set; }
 
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object> AdditionalAttributes { get; set; } = new();
@@ -378,9 +395,10 @@ public partial class BlazorFrame : IAsyncDisposable
               iframeElement,
               objRef,
               EnableAutoResize,
-              computedAllowedOrigins.ToArray());
+              computedAllowedOrigins.ToArray(),
+              EnableNavigationTracking);
               
-            Logger?.LogDebug("BlazorFrame initialized successfully for {Src}", Src);
+            Logger?.LogDebug("BlazorFrame initialized successfully for {Src} with navigation tracking: {NavigationEnabled}", Src, EnableNavigationTracking);
             
             // Generate and fire CSP header event if configured
             await HandleCspHeaderGeneration();
@@ -504,6 +522,53 @@ public partial class BlazorFrame : IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    [JSInvokable]
+    public async Task OnNavigationEvent(JsonElement navigationData)
+    {
+        try
+        {
+            var navigationEvent = new NavigationEvent
+            {
+                Url = navigationData.GetProperty("url").GetString() ?? string.Empty,
+                Pathname = navigationData.GetProperty("pathname").GetString() ?? string.Empty,
+                Search = navigationData.TryGetProperty("search", out var searchProp) && searchProp.ValueKind != JsonValueKind.Null 
+                    ? searchProp.GetString() 
+                    : null,
+                Hash = navigationData.TryGetProperty("hash", out var hashProp) && hashProp.ValueKind != JsonValueKind.Null 
+                    ? hashProp.GetString() 
+                    : null,
+                Origin = navigationData.GetProperty("origin").GetString() ?? string.Empty,
+                IsSameOrigin = navigationData.TryGetProperty("isSameOrigin", out var sameOriginProp) && sameOriginProp.GetBoolean(),
+                NavigationType = navigationData.TryGetProperty("navigationType", out var navTypeProp) 
+                    ? navTypeProp.GetString() ?? "unknown" 
+                    : "unknown",
+                QueryParameters = new Dictionary<string, string>()
+            };
+
+            // Parse query parameters
+            if (navigationData.TryGetProperty("queryParameters", out var queryParams) && queryParams.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var param in queryParams.EnumerateObject())
+                {
+                    navigationEvent.QueryParameters[param.Name] = param.Value.GetString() ?? string.Empty;
+                }
+            }
+
+            Logger?.LogDebug("BlazorFrame navigation event: {Url} (type: {Type}, same-origin: {SameOrigin})", 
+                navigationEvent.Url, navigationEvent.NavigationType, navigationEvent.IsSameOrigin);
+
+            // Fire navigation event
+            await OnNavigation.InvokeAsync(navigationEvent);
+            
+            // Fire simple URL changed event
+            await OnUrlChanged.InvokeAsync(navigationEvent.Url);
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Error processing navigation event");
+        }
+    }
+
     private void UpdateAllowedOrigins()
     {
         computedAllowedOrigins.Clear();
@@ -547,4 +612,4 @@ public partial class BlazorFrame : IAsyncDisposable
             isInitialized = false;
         }
     }
-}}
+}

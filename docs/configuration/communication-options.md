@@ -1,590 +1,230 @@
 # Communication Configuration
 
-**Cross-frame messaging and event handling for BlazorFrame**
+**Cross-frame messaging, navigation tracking, and event handling for BlazorFrame**
 
-This guide covers all aspects of configuring communication between your Blazor application and iframe content, including message validation, origin control, event handling, and **bidirectional communication**.
+This guide covers all aspects of configuring communication between your Blazor application and iframe content, including message validation, origin control, event handling, **bidirectional communication**, and **navigation tracking**.
 
-## Message Handling Overview
+## Communication Overview
 
 BlazorFrame provides comprehensive communication capabilities:
 
 - **Iframe -> Host** (`OnValidatedMessage`) - Receive messages from iframe with validation
 - **Host -> Iframe** (`SendMessageAsync`) - Send messages to iframe with security validation
+- **Navigation Events** (`OnNavigation`) - Track URL changes with query parameters
 - **Raw Messages** (`OnMessage`) - Legacy support for simple scenarios
 
-## Basic Message Configuration
+## Navigation Tracking
 
-### Bidirectional Communication
+### Basic Navigation Event Handling
 
 ```razor
 <BlazorFrame @ref="iframeRef"
             Src="@widgetUrl"
-            OnValidatedMessage="HandleMessage" />
-
-<button class="btn btn-primary" @onclick="SendDataToIframe">
-    Send Data to Iframe
-</button>
+            EnableNavigationTracking="true"
+            OnNavigation="HandleNavigation"
+            OnUrlChanged="HandleUrlChanged" />
 
 @code {
     private BlazorFrame? iframeRef;
     
-    // Send structured data to iframe
-    private async Task SendDataToIframe()
+    private async Task HandleNavigation(NavigationEvent navigation)
     {
-        if (iframeRef == null) return;
+        Logger.LogInformation("Navigation to {Url}", navigation.Url);
         
-        var success = await iframeRef.SendMessageAsync(new
-        {
-            type = "data-update",
-            timestamp = DateTime.UtcNow,
-            data = new
-            {
-                userId = currentUser.Id,
-                preferences = currentUser.Preferences,
-                theme = currentTheme
-            }
-        });
+        // Access URL components
+        Logger.LogInformation("Pathname: {Pathname}", navigation.Pathname);
+        Logger.LogInformation("Query: {Query}", navigation.Search);
+        Logger.LogInformation("Hash: {Hash}", navigation.Hash);
+        Logger.LogInformation("Navigation Type: {Type}", navigation.NavigationType);
         
-        if (success)
+        // Process query parameters
+        foreach (var param in navigation.QueryParameters)
         {
-            Logger.LogInformation("Data sent successfully to iframe");
+            Logger.LogInformation("Query param {Key}: {Value}", param.Key, param.Value);
+        }
+        
+        // Handle different navigation types
+        switch (navigation.NavigationType)
+        {
+            case "load":
+                await HandleInitialLoad(navigation);
+                break;
+            case "pushstate":
+            case "replacestate":
+                await HandleProgrammaticNavigation(navigation);
+                break;
+            case "popstate":
+                await HandleHistoryNavigation(navigation);
+                break;
+            case "hashchange":
+                await HandleHashChange(navigation);
+                break;
+            case "postmessage":
+                await HandleMessageNavigation(navigation);
+                break;
         }
     }
     
-    // Send typed messages with automatic structure
-    private async Task SendNotification()
+    private Task HandleUrlChanged(string newUrl)
     {
-        await iframeRef.SendTypedMessageAsync("notification", new
-        {
-            message = "Hello from host!",
-            level = "info",
-            timestamp = DateTimeOffset.UtcNow
-        });
-    }
-    
-    private async Task HandleMessage(IframeMessage message)
-    {
-        if (message.MessageType == "request-user-data")
-        {
-            // Respond to iframe's request for user data
-            await SendUserDataToIframe();
-        }
-    }
-    
-    private async Task SendUserDataToIframe()
-    {
-        await iframeRef.SendTypedMessageAsync("user-data-response", new
-        {
-            user = new
-            {
-                id = currentUser.Id,
-                name = currentUser.Name,
-                email = currentUser.Email,
-                permissions = currentUser.Permissions
-            }
-        });
+        Logger.LogInformation("Simple URL change: {Url}", newUrl);
+        return Task.CompletedTask;
     }
 }
 ```
 
-## Origin Validation
-
-### Explicit Origin Configuration
-```razor
-<BlazorFrame Src="@trustedWidgetUrl"
-            AllowedOrigins="@allowedOrigins"
-            SecurityOptions="@securityOptions" />
-
-@code {
-    private readonly List<string> allowedOrigins = new()
-    {
-        "https://widget.example.com",
-        "https://api.example.com",
-        "https://cdn.example.com"
-    };
-    
-    private readonly MessageSecurityOptions securityOptions = new()
-    {
-        ValidateOrigins = true,
-        StrictOriginMatching = true,
-        LogSecurityViolations = true
-    };
-}
-```
-
-### Dynamic Origin Management
-
-```razor
-<BlazorFrame Src="@currentWidgetUrl"
-            AllowedOrigins="@GetAllowedOrigins()"
-            OnValidatedMessage="HandleMessage" />
-
-@code {
-    private List<string> GetAllowedOrigins()
-    {
-        var origins = new List<string>();
-        
-        // Add origins based on current configuration
-        if (IsDevelopment())
-        {
-            origins.Add("http://localhost:3000");
-            origins.Add("http://localhost:8080");
-        }
-        
-        // Add production origins
-        origins.Add("https://widgets.myapp.com");
-        
-        // Add partner origins based on current user/tenant
-        origins.AddRange(GetPartnerOrigins());
-        
-        return origins;
-    }
-    
-    private List<string> GetPartnerOrigins()
-    {
-        // Dynamically determine allowed partner origins
-        return currentUser.PartnerDomains ?? new List<string>();
-    }
-}
-```
-
-### Wildcard and Pattern Matching
-
-```razor
-@code {
-    private readonly MessageSecurityOptions wildcardOptions = new()
-    {
-        ValidateOrigins = true,
-        AllowWildcardOrigins = true,
-        AllowedOriginPatterns = new List<string>
-        {
-            "https://*.example.com",        // Subdomains of example.com
-            "https://app-*.myservice.com",  // Pattern matching
-            "https://tenant-*.widgets.com"  // Multi-tenant patterns
-        },
-        StrictPatternMatching = true
-    };
-}
-```
-
-## Message Validation
-
-### Comprehensive Message Validation
+### Advanced Navigation Handling
 
 ```razor
 <BlazorFrame Src="@widgetUrl"
-            SecurityOptions="@validationOptions"
-            OnValidatedMessage="HandleValidatedMessage"
-            OnSecurityViolation="HandleValidationViolation" />
+            EnableNavigationTracking="@IsSameOriginWidget()"
+            OnNavigation="HandleAdvancedNavigation" />
 
 @code {
-    private readonly MessageSecurityOptions validationOptions = new()
-    {
-        EnableStrictValidation = true,
-        MaxMessageSize = 32 * 1024,        // 32KB limit
-        MaxJsonDepth = 10,                 // Max nesting depth
-        MaxObjectProperties = 100,          // Max properties per object
-        MaxArrayElements = 1000,           // Max array length
-        ValidateMessageStructure = true,    // Validate JSON structure
-        FilterMaliciousContent = true,     // Filter dangerous patterns
-        SanitizeStringValues = true,       // Sanitize string content
-        AllowHtmlContent = false,          // Block HTML in messages
-        LogSecurityViolations = true
-    };
+    private readonly Dictionary<string, object> navigationHistory = new();
     
-    private async Task HandleValidatedMessage(IframeMessage message)
-    {
-        // Message has passed all validation
-        switch (message.MessageType)
-        {
-            case "user-action":
-                await HandleUserAction(message);
-                break;
-                
-            case "data-update":
-                await HandleDataUpdate(message);
-                break;
-                
-            case "navigation":
-                await HandleNavigation(message);
-                break;
-                
-            default:
-                Logger.LogWarning("Unknown message type: {Type}", message.MessageType);
-                break;
-        }
-    }
-}
-```
-
-### Custom Message Validation
-
-```razor
-@code {
-    private readonly MessageSecurityOptions customValidationOptions = new()
-    {
-        EnableStrictValidation = true,
-        CustomValidators = new List<IMessageValidator>
-        {
-            new BusinessRuleValidator(),
-            new SchemaValidator(),
-            new SecurityPolicyValidator()
-        }
-    };
-    
-    public class BusinessRuleValidator : IMessageValidator
-    {
-        public ValidationResult Validate(IframeMessage message)
-        {
-            // Custom business rule validation
-            if (message.MessageType == "payment" && !IsValidPaymentMessage(message))
-            {
-                return ValidationResult.Failure("Invalid payment message format");
-            }
-            
-            return ValidationResult.Success();
-        }
-        
-        private bool IsValidPaymentMessage(IframeMessage message)
-        {
-            // Implement payment-specific validation
-            var data = JsonSerializer.Deserialize<PaymentMessage>(message.Data);
-            return data.Amount > 0 && !string.IsNullOrEmpty(data.Currency);
-        }
-    }
-}
-```
-
-## Message Types and Routing
-
-### Structured Message Handling
-
-```razor
-<BlazorFrame Src="@widgetUrl"
-            OnValidatedMessage="RouteMessage" />
-
-@code {
-    private async Task RouteMessage(IframeMessage message)
+    private bool IsSameOriginWidget()
     {
         try
         {
-            switch (message.MessageType?.ToLowerInvariant())
-            {
-                case "user-event":
-                    await HandleUserEvent(message);
-                    break;
-                    
-                case "data-request":
-                    await HandleDataRequest(message);
-                    break;
-                    
-                case "configuration-change":
-                    await HandleConfigurationChange(message);
-                    break;
-                    
-                case "error-report":
-                    await HandleErrorReport(message);
-                    break;
-                    
-                case "analytics-event":
-                    await HandleAnalyticsEvent(message);
-                    break;
-                    
-                default:
-                    Logger.LogWarning("Unhandled message type: {Type}", message.MessageType);
-                    await HandleUnknownMessage(message);
-                    break;
-            }
+            var widgetUri = new Uri(widgetUrl);
+            var hostUri = new Uri(NavigationManager.BaseUri);
+            return widgetUri.Host.Equals(hostUri.Host, StringComparison.OrdinalIgnoreCase);
         }
-        catch (Exception ex)
+        catch
         {
-            Logger.LogError(ex, "Error processing message: {Type}", message.MessageType);
-            await HandleMessageError(message, ex);
+            return false;
         }
     }
     
-    private async Task HandleUserEvent(IframeMessage message)
+    private async Task HandleAdvancedNavigation(NavigationEvent navigation)
     {
-        var userEvent = JsonSerializer.Deserialize<UserEventMessage>(message.Data);
+        // Store navigation in history
+        navigationHistory[navigation.Timestamp.ToString()] = navigation;
         
-        // Process user interaction
-        await Analytics.TrackUserEvent(userEvent.EventName, userEvent.Properties);
-        
-        // Update application state
-        await UpdateUserInterface(userEvent);
-        
-        // Send response back to iframe
-        await SendResponseToIframe(message.Origin, new
+        // Extract specific query parameters
+        if (navigation.QueryParameters.TryGetValue("userId", out var userId))
         {
-            type = "user-event-processed",
-            eventId = userEvent.EventId,
-            status = "success"
+            await HandleUserContext(userId);
+        }
+        
+        if (navigation.QueryParameters.TryGetValue("action", out var action))
+        {
+            await HandleActionRequest(action, navigation.QueryParameters);
+        }
+        
+        // Track analytics
+        await TrackPageView(navigation.Pathname, navigation.QueryParameters);
+        
+        // Update parent application state based on iframe navigation
+        await SyncApplicationState(navigation);
+    }
+    
+    private async Task HandleUserContext(string userId)
+    {
+        // Load user-specific data when iframe navigates to user pages
+        var userData = await UserService.GetUserDataAsync(userId);
+        await iframeRef.SendTypedMessageAsync("user-context", userData);
+    }
+    
+    private async Task HandleActionRequest(string action, Dictionary<string, string> parameters)
+    {
+        // Handle action requests from iframe navigation
+        switch (action.ToLowerInvariant())
+        {
+            case "export":
+                await HandleExportRequest(parameters);
+                break;
+            case "share":
+                await HandleShareRequest(parameters);
+                break;
+            case "settings":
+                await ShowSettingsDialog(parameters);
+                break;
+        }
+    }
+}
+```
+
+### Cross-Origin Navigation Limitations
+
+```razor
+@code {
+    // Navigation tracking has limitations with cross-origin iframes
+    private async Task HandleCrossOriginNavigation()
+    {
+        // For cross-origin iframes, navigation events can be sent via postMessage
+        // The iframe content needs to explicitly send navigation messages:
+        /*
+        JavaScript in iframe:
+        window.addEventListener('popstate', function(event) {
+            parent.postMessage({
+                type: 'navigation',
+                url: window.location.href,
+                pathname: window.location.pathname,
+                search: window.location.search,
+                hash: window.location.hash
+            }, '*');
         });
+        */
     }
+}
+```
+
+### Navigation Security Considerations
+
+```razor
+<BlazorFrame Src="@trustedWidgetUrl"
+            EnableNavigationTracking="true"
+            SecurityOptions="@navigationSecurityOptions"
+            OnNavigation="HandleSecureNavigation" />
+
+@code {
+    private readonly MessageSecurityOptions navigationSecurityOptions = new MessageSecurityOptions()
+        .ForProduction()
+        .WithStrictSandbox(); // Restrict iframe capabilities
     
-    private async Task HandleDataRequest(IframeMessage message)
+    private async Task HandleSecureNavigation(NavigationEvent navigation)
     {
-        var dataRequest = JsonSerializer.Deserialize<DataRequestMessage>(message.Data);
+        // Validate navigation is to allowed domains
+        var allowedDomains = new[] { "trusted-widget.example.com", "api.example.com" };
+        var navigationUri = new Uri(navigation.Url);
         
-        // Validate request permissions
-        if (!await IsAuthorizedForData(dataRequest.ResourceType))
+        if (!allowedDomains.Contains(navigationUri.Host))
         {
-            await SendErrorResponse(message.Origin, "Unauthorized data request");
+            Logger.LogWarning("Navigation to untrusted domain: {Domain}", navigationUri.Host);
+            await HandleUntrustedNavigation(navigation);
             return;
         }
         
-        // Fetch requested data
-        var responseData = await DataService.GetData(dataRequest.ResourceType, dataRequest.Parameters);
+        // Sanitize query parameters
+        var sanitizedParams = SanitizeQueryParameters(navigation.QueryParameters);
         
-        // Send data back to iframe
-        await SendResponseToIframe(message.Origin, new
-        {
-            type = "data-response",
-            requestId = dataRequest.RequestId,
-            data = responseData
-        });
-    }
-}
-```
-
-### Type-Safe Message Handling
-
-```csharp
-// Define message types
-public record UserEventMessage(string EventId, string EventName, Dictionary<string, object> Properties);
-public record DataRequestMessage(string RequestId, string ResourceType, Dictionary<string, object> Parameters);
-public record ConfigurationChangeMessage(string Setting, object Value);
-public record ErrorReportMessage(string ErrorType, string Message, string StackTrace);
-
-// Type-safe message processor
-public class MessageProcessor
-{
-    public async Task<T> ProcessMessage<T>(IframeMessage message) where T : class
-    {
-        try
-        {
-            var options = new JsonSerializerOptions 
-            { 
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
-            };
-            
-            return JsonSerializer.Deserialize<T>(message.Data, options);
-        }
-        catch (JsonException ex)
-        {
-            throw new MessageValidationException($"Failed to deserialize message of type {typeof(T).Name}", ex);
-        }
-    }
-}
-```
-
-## Event Handling
-
-### Comprehensive Event Configuration
-
-```razor
-<BlazorFrame Src="@widgetUrl"
-            OnValidatedMessage="HandleValidatedMessage"
-            OnSecurityViolation="HandleSecurityViolation"
-            OnLoad="HandleIframeLoad"
-            OnError="HandleIframeError"
-            OnResize="HandleIframeResize"
-            OnInitializationError="HandleInitializationError" />
-
-@code {
-    private async Task HandleIframeLoad()
-    {
-        Logger.LogInformation("Iframe loaded successfully");
-        
-        // Send initial configuration to iframe
-        await SendInitialConfiguration();
-        
-        // Update UI state
-        isIframeReady = true;
-        StateHasChanged();
+        // Process trusted navigation
+        await ProcessTrustedNavigation(navigation, sanitizedParams);
     }
     
-    private async Task HandleIframeError(Exception error)
+    private Dictionary<string, string> SanitizeQueryParameters(Dictionary<string, string> parameters)
     {
-        Logger.LogError(error, "Iframe error occurred");
+        var sanitized = new Dictionary<string, string>();
+        var allowedParams = new[] { "userId", "action", "page", "filter" };
         
-        // Show error message to user
-        await ShowErrorMessage("Widget failed to load. Please try again.");
-        
-        // Attempt reload if appropriate
-        if (ShouldAttemptReload(error))
+        foreach (var param in parameters)
         {
-            await ReloadIframe();
-        }
-    }
-    
-    private async Task HandleIframeResize(ResizeEventArgs args)
-    {
-        Logger.LogDebug("Iframe resized to {Width}x{Height}", args.Width, args.Height);
-        
-        // Adjust surrounding layout
-        await AdjustLayoutForNewSize(args.Width, args.Height);
-    }
-    
-    private async Task HandleInitializationError(Exception error)
-    {
-        Logger.LogError(error, "Iframe initialization failed");
-        
-        // Fallback to alternative content
-        await ShowFallbackContent();
-    }
-}
-```
-
-### Error Recovery and Retry Logic
-
-```razor
-@code {
-    private int retryCount = 0;
-    private const int MaxRetries = 3;
-    
-    private async Task HandleIframeError(Exception error)
-    {
-        retryCount++;
-        
-        if (retryCount <= MaxRetries)
-        {
-            Logger.LogWarning("Iframe error (attempt {Count}/{Max}): {Error}", 
-                retryCount, MaxRetries, error.Message);
-                
-            // Exponential backoff
-            var delayMs = Math.Pow(2, retryCount) * 1000;
-            await Task.Delay(TimeSpan.FromMilliseconds(delayMs));
-            
-            // Retry loading
-            await ReloadIframe();
-        }
-        else
-        {
-            Logger.LogError("Iframe failed after {Count} attempts: {Error}", 
-                MaxRetries, error.Message);
-                
-            // Show permanent error state
-            await ShowPermanentError();
-        }
-    }
-    
-    private async Task ReloadIframe()
-    {
-        // Reset iframe by changing source temporarily
-        var originalSrc = widgetUrl;
-        widgetUrl = "about:blank";
-        StateHasChanged();
-        
-        await Task.Delay(100); // Brief pause
-        
-        widgetUrl = originalSrc;
-        StateHasChanged();
-    }
-}
-```
-
-## Performance Optimization
-
-### Message Throttling
-
-```razor
-@code {
-    private readonly Dictionary<string, DateTime> lastMessageTimes = new();
-    private readonly TimeSpan messageThrottle = TimeSpan.FromMilliseconds(100);
-    
-    private async Task HandleValidatedMessage(IframeMessage message)
-    {
-        var messageKey = $"{message.Origin}:{message.MessageType}";
-        
-        // Throttle rapid messages
-        if (lastMessageTimes.TryGetValue(messageKey, out var lastTime))
-        {
-            if (DateTime.UtcNow - lastTime < messageThrottle)
+            if (allowedParams.Contains(param.Key.ToLowerInvariant()))
             {
-                // Skip this message due to throttling
-                return;
+                // Basic XSS prevention
+                var cleanValue = param.Value
+                    .Replace("<", "&lt;")
+                    .Replace(">", "&gt;")
+                    .Replace("'", "&#x27;")
+                    .Replace("\"", "&quot;");
+                    
+                sanitized[param.Key] = cleanValue;
             }
         }
         
-        lastMessageTimes[messageKey] = DateTime.UtcNow;
-        
-        // Process the message
-        await ProcessMessage(message);
+        return sanitized;
     }
 }
 ```
-
-### Message Queuing
-
-```razor
-@code {
-    private readonly Queue<IframeMessage> messageQueue = new();
-    private bool isProcessingQueue = false;
-    
-    private async Task HandleValidatedMessage(IframeMessage message)
-    {
-        // Add message to queue
-        messageQueue.Enqueue(message);
-        
-        // Process queue if not already processing
-        if (!isProcessingQueue)
-        {
-            await ProcessMessageQueue();
-        }
-    }
-    
-    private async Task ProcessMessageQueue()
-    {
-        isProcessingQueue = true;
-        
-        try
-        {
-            while (messageQueue.Count > 0)
-            {
-                var message = messageQueue.Dequeue();
-                
-                try
-                {
-                    await ProcessMessage(message);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, "Error processing queued message: {Type}", message.MessageType);
-                }
-                
-                // Small delay to prevent overwhelming the UI thread
-                await Task.Delay(1);
-            }
-        }
-        finally
-        {
-            isProcessingQueue = false;
-        }
-    }
-}
-```
-
-## Communication Best Practices
-
-### Do
-- **Use OnValidatedMessage** for new implementations instead of OnMessage
-- **Validate all message origins** to prevent malicious content
-- **Implement proper error handling** for all communication scenarios
-- **Use type-safe message structures** with proper serialization
-- **Log security violations** for monitoring and debugging
-- **Implement message throttling** to prevent abuse
-- **Handle iframe load failures** gracefully with retry logic
-- **Use request-response patterns** for structured communication
-
-### Don't
-- **Trust messages blindly** - Always validate content and origin
-- **Ignore security violations** - Investigate all security events
-- **Send sensitive data** without proper encryption
-- **Use overly large message limits** that could enable DoS attacks
-- **Block the UI thread** with message processing
-- **Forget to handle communication errors** - Always have fallback plans
-- **Use wildcard origins** in production without careful consideration
-- **Skip message validation** for performance reasons
-
----

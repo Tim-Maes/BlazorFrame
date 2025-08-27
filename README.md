@@ -19,6 +19,7 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 - **Security-First Design** - Built-in origin validation, message filtering, and sandbox isolation
 - **Content Security Policy** - Comprehensive CSP integration with fluent configuration API
 - **Bidirectional Communication** - Secure postMessage communication with validation for both directions
+- **Navigation Tracking** - Capture iframe navigation events with URL and query parameters
 - **Sandbox Support** - Multiple security levels from permissive to paranoid isolation
 - **Environment-Aware** - Different configurations for development vs production
 - **Automatic Resizing** - Smart height adjustment based on iframe content
@@ -57,11 +58,13 @@ dotnet add package BlazorFrame
 <!-- Simple iframe with automatic security -->
 <BlazorFrame Src="https://example.com" />
 
-<!-- Production-ready configuration with bidirectional communication -->
+<!-- Production-ready configuration with bidirectional communication and navigation tracking -->
 <BlazorFrame @ref="iframeRef"
             Src="https://widget.example.com"
+            EnableNavigationTracking="true"
             SecurityOptions="@securityOptions"
             OnValidatedMessage="HandleMessage"
+            OnNavigation="HandleNavigation"
             OnSecurityViolation="HandleViolation" />
 
 <button @onclick="SendDataToIframe">Send Data</button>
@@ -77,6 +80,13 @@ dotnet add package BlazorFrame
     private Task HandleMessage(IframeMessage message)
     {
         Console.WriteLine($"Received message from {message.Origin}: {message.Data}");
+        return Task.CompletedTask;
+    }
+
+    private Task HandleNavigation(NavigationEvent navigation)
+    {
+        Console.WriteLine($"Navigation to: {navigation.Url}");
+        Console.WriteLine($"Query params: {string.Join(", ", navigation.QueryParameters)}");
         return Task.CompletedTask;
     }
 

@@ -2,6 +2,7 @@
 using Microsoft.JSInterop;
 using Microsoft.Extensions.Logging;
 using BlazorFrame.Services;
+using System.Text.Json;
 
 namespace BlazorFrame;
 
@@ -65,6 +66,16 @@ public partial class BlazorFrame : IAsyncDisposable
     /// </summary>
     [Parameter] public EventCallback<CspHeader> OnCspHeaderGenerated { get; set; }
 
+    /// <summary>
+    /// Event fired when a message is successfully sent to the iframe
+    /// </summary>
+    [Parameter] public EventCallback<string> OnMessageSent { get; set; }
+
+    /// <summary>
+    /// Event fired when sending a message to the iframe fails
+    /// </summary>
+    [Parameter] public EventCallback<Exception> OnMessageSendFailed { get; set; }
+
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object> AdditionalAttributes { get; set; } = new();
 
@@ -102,6 +113,119 @@ public partial class BlazorFrame : IAsyncDisposable
             
             return attributes;
         }
+    }
+
+    /// <summary>
+    /// Sends a message to the iframe content
+    /// </summary>
+    /// <param name="data">Message data to send</param>
+    /// <param name="targetOrigin">Target origin for security (defaults to iframe origin)</param>
+    /// <returns>True if message was sent successfully</returns>
+    public async Task<bool> SendMessageAsync(object data, string? targetOrigin = null)
+    {
+        if (module == null || !isInitialized)
+        {
+            var ex = new InvalidOperationException("BlazorFrame not initialized. Cannot send message.");
+            Logger?.LogError(ex, "Attempted to send message before initialization");
+            await OnMessageSendFailed.InvokeAsync(ex);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(Src))
+        {
+            var ex = new InvalidOperationException("BlazorFrame Src is not set. Cannot determine target origin.");
+            Logger?.LogError(ex, "Attempted to send message without valid Src");
+            await OnMessageSendFailed.InvokeAsync(ex);
+            return false;
+        }
+
+        try
+        {
+            // Use specified target origin or derive from Src
+            var effectiveOrigin = targetOrigin ?? validationService.ExtractOrigin(Src);
+            if (string.IsNullOrEmpty(effectiveOrigin))
+            {
+                var ex = new ArgumentException($"Cannot determine valid origin from Src: {Src}");
+                Logger?.LogError(ex, "Invalid target origin for message");
+                await OnMessageSendFailed.InvokeAsync(ex);
+                return false;
+            }
+
+            // Validate target origin is allowed
+            if (!computedAllowedOrigins.Contains(effectiveOrigin, StringComparer.OrdinalIgnoreCase))
+            {
+                var ex = new UnauthorizedAccessException($"Target origin '{effectiveOrigin}' is not in allowed origins list");
+                Logger?.LogWarning(ex, "Attempted to send message to unauthorized origin");
+                await OnMessageSendFailed.InvokeAsync(ex);
+                return false;
+            }
+
+            // Serialize message data
+            var messageJson = JsonSerializer.Serialize(data, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+
+            // Validate outbound message if strict validation is enabled
+            if (SecurityOptions.EnableStrictValidation)
+            {
+                var validationResult = validationService.ValidateMessage(
+                    effectiveOrigin, 
+                    messageJson, 
+                    computedAllowedOrigins, 
+                    SecurityOptions);
+
+                if (!validationResult.IsValid)
+                {
+                    var ex = new ArgumentException($"Outbound message validation failed: {validationResult.ValidationError}");
+                    Logger?.LogWarning(ex, "Outbound message failed validation");
+                    await OnMessageSendFailed.InvokeAsync(ex);
+                    return false;
+                }
+            }
+
+            // Send message via JavaScript
+            var success = await module.InvokeAsync<bool>("sendMessage", iframeElement, messageJson, effectiveOrigin);
+            
+            if (success)
+            {
+                Logger?.LogDebug("BlazorFrame: Message sent successfully to {Origin}", effectiveOrigin);
+                await OnMessageSent.InvokeAsync(messageJson);
+            }
+            else
+            {
+                var ex = new InvalidOperationException("JavaScript sendMessage returned false");
+                Logger?.LogWarning(ex, "Failed to send message to iframe");
+                await OnMessageSendFailed.InvokeAsync(ex);
+            }
+
+            return success;
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Error sending message to iframe");
+            await OnMessageSendFailed.InvokeAsync(ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sends a message to the iframe content with automatic type detection
+    /// </summary>
+    /// <param name="messageType">Type identifier for the message</param>
+    /// <param name="data">Message payload</param>
+    /// <param name="targetOrigin">Target origin for security (defaults to iframe origin)</param>
+    /// <returns>True if message was sent successfully</returns>
+    public async Task<bool> SendTypedMessageAsync(string messageType, object? data = null, string? targetOrigin = null)
+    {
+        var message = new
+        {
+            type = messageType,
+            data = data,
+            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        };
+
+        return await SendMessageAsync(message, targetOrigin);
     }
 
     /// <summary>
@@ -423,4 +547,4 @@ public partial class BlazorFrame : IAsyncDisposable
             isInitialized = false;
         }
     }
-}
+}}

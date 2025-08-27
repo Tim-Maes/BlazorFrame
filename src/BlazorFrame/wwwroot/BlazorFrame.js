@@ -129,3 +129,26 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
         console.log('BlazorFrame: Cleanup completed');
     };
 }
+
+// New function for bidirectional communication - sending messages to iframe
+export function sendMessage(iframe, messageJson, targetOrigin) {
+    if (!iframe || !iframe.contentWindow) {
+        console.warn('BlazorFrame: Cannot send message - iframe not ready');
+        return false;
+    }
+
+    if (!targetOrigin) {
+        console.warn('BlazorFrame: Cannot send message - target origin not specified');
+        return false;
+    }
+
+    try {
+        const messageData = JSON.parse(messageJson);
+        iframe.contentWindow.postMessage(messageData, targetOrigin);
+        console.log('BlazorFrame: Message sent to iframe:', targetOrigin);
+        return true;
+    } catch (error) {
+        console.error('BlazorFrame: Failed to send message to iframe:', error);
+        return false;
+    }
+}

@@ -339,6 +339,39 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
 }
 ```
 
+### OnMessageSent
+**Type:** `EventCallback<string>`  
+**Description:** Fired when a message is successfully sent to the iframe.
+
+```razor
+<BlazorFrame Src="https://example.com" OnMessageSent="HandleMessageSent" />
+
+@code {
+    private Task HandleMessageSent(string messageJson)
+    {
+        Logger.LogDebug("Message sent successfully: {Message}", messageJson);
+        return Task.CompletedTask;
+    }
+}
+```
+
+### OnMessageSendFailed
+**Type:** `EventCallback<Exception>`  
+**Description:** Fired when sending a message to the iframe fails.
+
+```razor
+<BlazorFrame Src="https://example.com" OnMessageSendFailed="HandleSendFailure" />
+
+@code {
+    private Task HandleSendFailure(Exception ex)
+    {
+        Logger.LogError(ex, "Failed to send message to iframe");
+        // Handle the failure appropriately
+        ShowErrorToUser("Communication with widget failed");
+        return Task.CompletedTask;
+    }
+}
+```
 ## Styling Parameters
 
 ### AdditionalAttributes

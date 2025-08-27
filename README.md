@@ -18,7 +18,7 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 
 - **Security-First Design** - Built-in origin validation, message filtering, and sandbox isolation
 - **Content Security Policy** - Comprehensive CSP integration with fluent configuration API
-- **Cross-Frame Messaging** - Secure postMessage communication with validation
+- **Bidirectional Communication** - Secure postMessage communication with validation for both directions
 - **Sandbox Support** - Multiple security levels from permissive to paranoid isolation
 - **Environment-Aware** - Different configurations for development vs production
 - **Automatic Resizing** - Smart height adjustment based on iframe content
@@ -57,13 +57,18 @@ dotnet add package BlazorFrame
 <!-- Simple iframe with automatic security -->
 <BlazorFrame Src="https://example.com" />
 
-<!-- Production-ready configuration -->
-<BlazorFrame Src="https://widget.example.com"
+<!-- Production-ready configuration with bidirectional communication -->
+<BlazorFrame @ref="iframeRef"
+            Src="https://widget.example.com"
             SecurityOptions="@securityOptions"
             OnValidatedMessage="HandleMessage"
             OnSecurityViolation="HandleViolation" />
 
+<button @onclick="SendDataToIframe">Send Data</button>
+
 @code {
+    private BlazorFrame? iframeRef;
+    
     private readonly MessageSecurityOptions securityOptions = new MessageSecurityOptions()
         .ForProduction()        // Strict security settings
         .WithBasicSandbox()     // Enable iframe sandboxing
@@ -79,7 +84,15 @@ dotnet add package BlazorFrame
     {
         Console.WriteLine($"Security violation: {violation.ValidationError}");
         return Task.CompletedTask;
-    };
+    }
+    
+    private async Task SendDataToIframe()
+    {
+        if (iframeRef != null)
+        {
+            await iframeRef.SendTypedMessageAsync("user-data", new { userId = 123, name = "John" });
+        }
+    }
 }
 ```
 

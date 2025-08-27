@@ -2,45 +2,87 @@
 
 **Cross-frame messaging and event handling for BlazorFrame**
 
-This guide covers all aspects of configuring communication between your Blazor application and iframe content, including message validation, origin control, and event handling.
+This guide covers all aspects of configuring communication between your Blazor application and iframe content, including message validation, origin control, event handling, and **bidirectional communication**.
 
 ## Message Handling Overview
 
-BlazorFrame provides two main approaches to handling messages:
+BlazorFrame provides comprehensive communication capabilities:
 
-- **Validated Messages** (`OnValidatedMessage`) - Recommended for new implementations
+- **Iframe -> Host** (`OnValidatedMessage`) - Receive messages from iframe with validation
+- **Host -> Iframe** (`SendMessageAsync`) - Send messages to iframe with security validation
 - **Raw Messages** (`OnMessage`) - Legacy support for simple scenarios
 
 ## Basic Message Configuration
 
-### Essential Message Handling
+### Bidirectional Communication
 
 ```razor
-<BlazorFrame Src="@widgetUrl"
-            SecurityOptions="@messageOptions"
-            OnValidatedMessage="HandleValidatedMessage"
-            OnSecurityViolation="HandleSecurityViolation" />
+<BlazorFrame @ref="iframeRef"
+            Src="@widgetUrl"
+            OnValidatedMessage="HandleMessage" />
+
+<button class="btn btn-primary" @onclick="SendDataToIframe">
+    Send Data to Iframe
+</button>
 
 @code {
-    private readonly MessageSecurityOptions messageOptions = new MessageSecurityOptions()
-        .ForProduction()
-        .WithBasicSandbox();
+    private BlazorFrame? iframeRef;
     
-    private async Task HandleValidatedMessage(IframeMessage message)
+    // Send structured data to iframe
+    private async Task SendDataToIframe()
     {
-        Logger.LogInformation("Received message from {Origin}: {Data}", 
-            message.Origin, message.Data);
-            
-        // Process the validated message
-        await ProcessMessage(message);
+        if (iframeRef == null) return;
+        
+        var success = await iframeRef.SendMessageAsync(new
+        {
+            type = "data-update",
+            timestamp = DateTime.UtcNow,
+            data = new
+            {
+                userId = currentUser.Id,
+                preferences = currentUser.Preferences,
+                theme = currentTheme
+            }
+        });
+        
+        if (success)
+        {
+            Logger.LogInformation("Data sent successfully to iframe");
+        }
     }
     
-    private async Task HandleSecurityViolation(IframeMessage violation)
+    // Send typed messages with automatic structure
+    private async Task SendNotification()
     {
-        Logger.LogWarning("Security violation: {Error}", violation.ValidationError);
-        
-        // Handle security issues
-        await HandleSecurityIssue(violation);
+        await iframeRef.SendTypedMessageAsync("notification", new
+        {
+            message = "Hello from host!",
+            level = "info",
+            timestamp = DateTimeOffset.UtcNow
+        });
+    }
+    
+    private async Task HandleMessage(IframeMessage message)
+    {
+        if (message.MessageType == "request-user-data")
+        {
+            // Respond to iframe's request for user data
+            await SendUserDataToIframe();
+        }
+    }
+    
+    private async Task SendUserDataToIframe()
+    {
+        await iframeRef.SendTypedMessageAsync("user-data-response", new
+        {
+            user = new
+            {
+                id = currentUser.Id,
+                name = currentUser.Name,
+                email = currentUser.Email,
+                permissions = currentUser.Permissions
+            }
+        });
     }
 }
 ```
@@ -331,139 +373,6 @@ public class MessageProcessor
         catch (JsonException ex)
         {
             throw new MessageValidationException($"Failed to deserialize message of type {typeof(T).Name}", ex);
-        }
-    }
-}
-```
-
-## Bidirectional Communication
-
-### Sending Messages to Iframe
-
-```razor
-<BlazorFrame @ref="iframeRef"
-            Src="@widgetUrl"
-            OnValidatedMessage="HandleMessage" />
-
-<button class="btn btn-primary" @onclick="SendDataToIframe">
-    Send Data to Iframe
-</button>
-
-@code {
-    private BlazorFrame? iframeRef;
-    
-    private async Task SendDataToIframe()
-    {
-        if (iframeRef == null) return;
-        
-        var messageData = new
-        {
-            type = "data-update",
-            timestamp = DateTime.UtcNow,
-            data = new
-            {
-                userId = currentUser.Id,
-                preferences = currentUser.Preferences,
-                theme = currentTheme
-            }
-        };
-        
-        await iframeRef.SendMessageAsync(messageData);
-    }
-    
-    private async Task HandleMessage(IframeMessage message)
-    {
-        if (message.MessageType == "request-user-data")
-        {
-            // Respond to iframe's request for user data
-            await SendUserDataToIframe();
-        }
-    }
-    
-    private async Task SendUserDataToIframe()
-    {
-        var userData = new
-        {
-            type = "user-data-response",
-            user = new
-            {
-                id = currentUser.Id,
-                name = currentUser.Name,
-                email = currentUser.Email,
-                permissions = currentUser.Permissions
-            }
-        };
-        
-        await iframeRef.SendMessageAsync(userData);
-    }
-}
-```
-
-### Request-Response Pattern
-
-```razor
-@code {
-    private readonly Dictionary<string, TaskCompletionSource<object>> pendingRequests = new();
-    
-    private async Task<T> SendRequestToIframe<T>(string requestType, object data)
-    {
-        var requestId = Guid.NewGuid().ToString();
-        var tcs = new TaskCompletionSource<object>();
-        
-        pendingRequests[requestId] = tcs;
-        
-        try
-        {
-            // Send request to iframe
-            await iframeRef.SendMessageAsync(new
-            {
-                type = requestType,
-                requestId = requestId,
-                data = data
-            });
-            
-            // Wait for response with timeout
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            cts.Token.Register(() => tcs.TrySetCanceled());
-            
-            var response = await tcs.Task;
-            return JsonSerializer.Deserialize<T>(response.ToString());
-        }
-        finally
-        {
-            pendingRequests.Remove(requestId);
-        }
-    }
-    
-    private async Task HandleMessage(IframeMessage message)
-    {
-        // Handle responses to our requests
-        if (message.MessageType?.EndsWith("-response") == true)
-        {
-            var responseData = JsonSerializer.Deserialize<ResponseMessage>(message.Data);
-            
-            if (pendingRequests.TryGetValue(responseData.RequestId, out var tcs))
-            {
-                tcs.SetResult(responseData.Data);
-            }
-        }
-    }
-    
-    // Usage example
-    private async Task GetIframeData()
-    {
-        try
-        {
-            var iframeData = await SendRequestToIframe<IframeDataResponse>(
-                "get-data", 
-                new { category = "user-preferences" }
-            );
-            
-            Logger.LogInformation("Received iframe data: {Data}", iframeData);
-        }
-        catch (OperationCanceledException)
-        {
-            Logger.LogWarning("Request to iframe timed out");
         }
     }
 }

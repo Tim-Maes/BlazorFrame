@@ -100,43 +100,63 @@ This guide covers all aspects of configuring how BlazorFrame appears and behaves
 @code {
     private readonly ResizeOptions basicResizeOptions = new()
     {
-        DebounceDelayMs = 100,      // Wait 100ms before resizing
-        UseResizeObserver = true,    // Use modern ResizeObserver API
-        MaxHeight = 1000,           // Maximum height in pixels
-        MinHeight = 200             // Minimum height in pixels
+        MinHeight = 200,             // Minimum height in pixels
+        MaxHeight = 1000,            // Maximum height in pixels
+        DebounceMs = 100,            // Wait 100ms before resizing
+        UseResizeObserver = true     // Use modern ResizeObserver API
     };
 }
 ```
+
+### ResizeOptions Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `MinHeight` | `int` | `100` | Minimum height in pixels |
+| `MaxHeight` | `int` | `50000` | Maximum height in pixels |
+| `PollingInterval` | `int` | `500` | Fallback polling interval (ms) when ResizeObserver is unavailable |
+| `DebounceMs` | `int` | `100` | Debounce delay to prevent excessive updates (set to 0 to disable) |
+| `UseResizeObserver` | `bool` | `true` | Use the modern ResizeObserver API when available |
+
+### Built-in Presets
+
+BlazorFrame provides built-in presets for common resize configurations:
+
+```razor
+@code {
+    // Default balanced configuration
+    private readonly ResizeOptions defaultOptions = ResizeOptions.Default;
+    
+    // Optimized for performance (less frequent updates)
+    private readonly ResizeOptions performanceOptions = ResizeOptions.Performance;
+    
+    // Optimized for responsiveness (more frequent updates)
+    private readonly ResizeOptions responsiveOptions = ResizeOptions.Responsive;
+}
+```
+
+| Preset | PollingInterval | DebounceMs | Best For |
+|--------|-----------------|------------|----------|
+| `Default` | 500ms | 100ms | Most use cases |
+| `Performance` | 1000ms | 250ms | Many iframes, mobile devices |
+| `Responsive` | 250ms | 50ms | Dynamic content, smooth animations |
 
 ### Advanced Auto-Resize Configuration
 
 ```razor
 <BlazorFrame Src="@contentUrl"
             EnableAutoResize="true"
-            ResizeOptions="@advancedResizeOptions"
-            OnResize="HandleResize" />
+            ResizeOptions="@advancedResizeOptions" />
 
 @code {
     private readonly ResizeOptions advancedResizeOptions = new()
     {
-        DebounceDelayMs = 50,           // Fast response for dynamic content
-        UseResizeObserver = true,        // Prefer modern API
-        FallbackPollingInterval = 1000,  // Fallback polling every 1 second
-        MaxHeight = 1500,               // Large max height for rich content
-        MinHeight = 150,                // Small min height for compact widgets
-        AutoResizeWidth = false,        // Only auto-resize height
-        RespectAspectRatio = true,      // Maintain aspect ratio if possible
-        SmoothResize = true,            // Animate resize transitions
-        ResizeThrottleMs = 16           // Throttle resize events (60fps)
+        MinHeight = 150,            // Small min height for compact widgets
+        MaxHeight = 1500,           // Large max height for rich content
+        PollingInterval = 1000,     // Fallback polling every 1 second
+        DebounceMs = 50,            // Fast response for dynamic content
+        UseResizeObserver = true    // Prefer modern API
     };
-    
-    private async Task HandleResize(ResizeEventArgs args)
-    {
-        Logger.LogDebug("Iframe resized to {Width}x{Height}", args.Width, args.Height);
-        
-        // Could trigger layout adjustments
-        await AdjustSurroundingLayout(args);
-    }
 }
 ```
 
@@ -165,6 +185,110 @@ This guide covers all aspects of configuring how BlazorFrame appears and behaves
     {
         // Set appropriate fixed height when auto-resize is disabled
         return ShouldAutoResize() ? "auto" : "400px";
+    }
+}
+```
+
+## Programmatic Reload
+
+Refresh iframe content without recreating the entire Blazor component. This is particularly useful for:
+- Refreshing PDF documents
+- Reloading dynamic content
+- Cache-busting with updated URLs
+
+### Basic Reload
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="https://example.com/document.pdf" />
+
+<button @onclick="RefreshContent">Refresh</button>
+
+@code {
+    private BlazorFrame? iframeRef;
+    
+    private async Task RefreshContent()
+    {
+        if (iframeRef != null)
+        {
+            await iframeRef.ReloadAsync();
+        }
+    }
+}
+```
+
+### Reload with New URL
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="@currentUrl" />
+
+<button @onclick="LoadNewDocument">Load New Document</button>
+
+@code {
+    private BlazorFrame? iframeRef;
+    private string currentUrl = "https://example.com/doc1.pdf";
+    
+    private async Task LoadNewDocument()
+    {
+        if (iframeRef != null)
+        {
+            await iframeRef.ReloadAsync("https://example.com/doc2.pdf");
+        }
+    }
+}
+```
+
+### Cache-Busting Reload
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="@pdfUrl" />
+
+<button @onclick="RefreshWithCacheBust">Force Refresh</button>
+
+@code {
+    private BlazorFrame? iframeRef;
+    private string pdfUrl = "https://example.com/report.pdf";
+    
+    private async Task RefreshWithCacheBust()
+    {
+        if (iframeRef != null)
+        {
+            // Add timestamp to bust cache
+            var cacheBustedUrl = $"{pdfUrl}?v={DateTime.UtcNow.Ticks}";
+            await iframeRef.ReloadAsync(cacheBustedUrl);
+        }
+    }
+}
+```
+
+### Auto-Refresh on Interval
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="@dashboardUrl" />
+
+@code {
+    private BlazorFrame? iframeRef;
+    private string dashboardUrl = "https://example.com/dashboard";
+    private Timer? refreshTimer;
+    
+    protected override void OnInitialized()
+    {
+        // Auto-refresh every 5 minutes
+        refreshTimer = new Timer(async _ =>
+        {
+            if (iframeRef != null)
+            {
+                await InvokeAsync(async () =>
+                {
+                    await iframeRef.ReloadAsync();
+                    StateHasChanged();
+                });
+            }
+        }, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+    }
+    
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
     }
 }
 ```
@@ -332,27 +456,16 @@ This guide covers all aspects of configuring how BlazorFrame appears and behaves
                 <img src="/images/iframe-placeholder.svg" alt="Loading" />
                 <h5>Loading Widget</h5>
                 <p>Please wait while we load the content...</p>
-                <div class="progress">
-                    <div class="progress-bar" style="width: @loadingProgress%"></div>
-                </div>
             </div>
         </div>
     }
     
     <BlazorFrame Src="@contentUrl"
-                OnLoad="@(() => contentLoaded = true)"
-                OnLoadProgress="UpdateLoadingProgress" />
+                OnLoad="@(() => contentLoaded = true)" />
 </div>
 
 @code {
     private bool contentLoaded = false;
-    private int loadingProgress = 0;
-    
-    private void UpdateLoadingProgress(int progress)
-    {
-        loadingProgress = progress;
-        StateHasChanged();
-    }
 }
 ```
 
@@ -384,24 +497,6 @@ This guide covers all aspects of configuring how BlazorFrame appears and behaves
             class="d-block d-md-none w-100"
             Width="100%"
             Height="300px" />
-```
-
-### Material Design Integration
-
-```razor
-<div class="mdc-card">
-    <div class="mdc-card__primary-action">
-        <BlazorFrame Src="@contentUrl"
-                    Width="100%"
-                    Height="400px"
-                    class="mdc-card__media mdc-card__media--16-9" />
-    </div>
-    <div class="mdc-card__actions">
-        <div class="mdc-card__action-buttons">
-            <button class="mdc-button mdc-card__action">Open Fullscreen</button>
-        </div>
-    </div>
-</div>
 ```
 
 ### Dark Mode Support
@@ -498,44 +593,6 @@ This guide covers all aspects of configuring how BlazorFrame appears and behaves
 </div>
 ```
 
-### Split Layout
-
-```razor
-<div class="split-layout">
-    <div class="split-left">
-        <BlazorFrame Src="@leftPanelUrl"
-                    Width="100%"
-                    Height="100%"
-                    EnableAutoResize="true" />
-    </div>
-    <div class="split-divider"></div>
-    <div class="split-right">
-        <BlazorFrame Src="@rightPanelUrl"
-                    Width="100%"
-                    Height="100%"
-                    EnableAutoResize="true" />
-    </div>
-</div>
-
-<style>
-.split-layout {
-    display: flex;
-    height: 600px;
-    gap: 10px;
-}
-
-.split-left, .split-right {
-    flex: 1;
-}
-
-.split-divider {
-    width: 1px;
-    background-color: #ddd;
-    cursor: col-resize;
-}
-</style>
-```
-
 ### Grid Layout
 
 ```razor
@@ -625,31 +682,10 @@ This guide covers all aspects of configuring how BlazorFrame appears and behaves
 ### Resource Optimization
 
 ```razor
-<BlazorFrame Src="@GetOptimizedUrl()"
+<BlazorFrame Src="@contentUrl"
             Width="100%"
             Height="400px"
-            ResizeOptions="@optimizedResizeOptions" />
-
-@code {
-    private string GetOptimizedUrl()
-    {
-        var url = baseContentUrl;
-        
-        // Add performance parameters
-        url += "?optimize=true";
-        url += "&quality=medium";
-        url += "&cache=1hour";
-        
-        return url;
-    }
-    
-    private readonly ResizeOptions optimizedResizeOptions = new()
-    {
-        DebounceDelayMs = 300,      // Longer debounce for performance
-        UseResizeObserver = true,    // Use efficient API
-        ResizeThrottleMs = 33       // 30fps throttling
-    };
-}
+            ResizeOptions="@ResizeOptions.Performance" />
 ```
 
 ## Accessibility
@@ -704,6 +740,9 @@ This guide covers all aspects of configuring how BlazorFrame appears and behaves
 ### Do
 - **Use responsive dimensions** - Make iframes work on all screen sizes
 - **Enable auto-resize** for dynamic content that changes height
+- **Configure ResizeOptions** appropriately for your use case
+- **Use built-in presets** (`ResizeOptions.Performance`, `ResizeOptions.Responsive`) when applicable
+- **Use `ReloadAsync()`** instead of recreating components for content refresh
 - **Provide loading indicators** - Show users that content is loading
 - **Set appropriate min/max heights** - Prevent layout issues
 - **Use semantic HTML** - Include proper titles and ARIA labels
@@ -718,5 +757,6 @@ This guide covers all aspects of configuring how BlazorFrame appears and behaves
 - **Make iframes too small** - Ensure content is readable
 - **Forget about responsive design** - Test on different screen sizes
 - **Overuse auto-resize** - Can cause performance issues with many iframes
+- **Recreate components** just to refresh content - use `ReloadAsync()` instead
 
 ---

@@ -22,7 +22,8 @@ A security-first Blazor iframe component with automatic resizing, cross-frame me
 - **Navigation Tracking** - Capture iframe navigation events with URL and query parameters
 - **Sandbox Support** - Multiple security levels from permissive to paranoid isolation
 - **Environment-Aware** - Different configurations for development vs production
-- **Automatic Resizing** - Smart height adjustment based on iframe content
+- **Automatic Resizing** - Smart height adjustment based on iframe content with configurable options
+- **Programmatic Reload** - Refresh iframe content without recreating the entire component
 
 ## Documentation
 
@@ -125,6 +126,76 @@ var paymentOptions = new MessageSecurityOptions()
     .ForPaymentWidget();
 ```
 
+### Auto-Resize Configuration
+
+Control how the iframe automatically adjusts its height based on content:
+
+```razor
+<BlazorFrame Src="https://example.com"
+            EnableAutoResize="true"
+            ResizeOptions="@resizeOptions" />
+
+@code {
+    // Custom resize configuration
+    private readonly ResizeOptions resizeOptions = new()
+    {
+        MinHeight = 200,
+        MaxHeight = 2000,
+        PollingInterval = 500,
+        DebounceMs = 100,
+        UseResizeObserver = true
+    };
+    
+    // Or use built-in presets:
+    // ResizeOptions.Default      - Balanced defaults
+    // ResizeOptions.Performance  - Less frequent updates (better performance)
+    // ResizeOptions.Responsive   - More frequent updates (smoother resizing)
+}
+```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `MinHeight` | 100 | Minimum height in pixels |
+| `MaxHeight` | 50000 | Maximum height in pixels |
+| `PollingInterval` | 500 | Fallback polling interval (ms) when ResizeObserver unavailable |
+| `DebounceMs` | 100 | Debounce delay to prevent excessive updates (0 to disable) |
+| `UseResizeObserver` | true | Use ResizeObserver API when available |
+
+### Programmatic Reload
+
+Refresh iframe content without recreating the entire component - useful for PDFs, dynamic content, or cache-busting:
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="@pdfUrl" />
+
+<button @onclick="RefreshContent">Refresh</button>
+<button @onclick="LoadNewDocument">Load New Document</button>
+
+@code {
+    private BlazorFrame? iframeRef;
+    private string pdfUrl = "https://example.com/document.pdf";
+    
+    // Reload the current content
+    private async Task RefreshContent()
+    {
+        if (iframeRef != null)
+        {
+            await iframeRef.ReloadAsync();
+        }
+    }
+    
+    // Load a new URL with cache-busting
+    private async Task LoadNewDocument()
+    {
+        if (iframeRef != null)
+        {
+            var cacheBustedUrl = $"https://example.com/document.pdf?v={DateTime.UtcNow.Ticks}";
+            await iframeRef.ReloadAsync(cacheBustedUrl);
+        }
+    }
+}
+```
+
 ### Content Security Policy
 
 ```razor
@@ -168,13 +239,56 @@ All iframe messages are automatically validated for:
 
 ### Sandbox Security Levels
 
-| Level | Description | Use Case |
+| Level | Permissions | Use Case |
 |-------|-------------|----------|
 | **None** | No restrictions | Trusted content only |
 | **Basic** | Scripts + same-origin | Most trusted widgets |
-| **Permissive** | + forms + popups | Interactive widgets |
-| **Strict** | Scripts + same-origin only | Display widgets |
-| **Paranoid** | Scripts only | Untrusted content |
+| **Permissive** | Scripts + same-origin + forms + popups | Interactive widgets |
+| **Strict** | Scripts only (no same-origin) | Semi-trusted content |
+| **Paranoid** | Empty sandbox (no permissions) | Untrusted content |
+
+## API Reference
+
+### Component Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `Src` | `string` | `""` | The URL to load in the iframe |
+| `Width` | `string` | `"100%"` | Width of the iframe |
+| `Height` | `string` | `"600px"` | Height of the iframe |
+| `EnableAutoResize` | `bool` | `true` | Enable automatic height adjustment |
+| `ResizeOptions` | `ResizeOptions?` | `null` | Configuration for auto-resize behavior |
+| `EnableScroll` | `bool` | `false` | Enable scrolling on the wrapper |
+| `EnableNavigationTracking` | `bool` | `false` | Track iframe navigation events |
+| `AllowedOrigins` | `List<string>?` | `null` | Allowed origins for postMessage |
+| `SecurityOptions` | `MessageSecurityOptions` | `new()` | Security configuration |
+| `CspOptions` | `CspOptions?` | `null` | Content Security Policy configuration |
+
+### Component Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `ReloadAsync()` | `Task` | Reloads the iframe content |
+| `ReloadAsync(string newSrc)` | `Task` | Reloads with a new source URL |
+| `SendMessageAsync(object data, string? targetOrigin)` | `Task<bool>` | Sends a message to the iframe |
+| `SendTypedMessageAsync(string type, object? data, string? targetOrigin)` | `Task<bool>` | Sends a typed message |
+| `GetRecommendedCspHeader()` | `CspHeader?` | Gets the recommended CSP header |
+| `ValidateCspConfiguration()` | `CspValidationResult?` | Validates the CSP configuration |
+
+### Events
+
+| Event | Type | Description |
+|-------|------|-------------|
+| `OnLoad` | `EventCallback` | Fired when iframe loads |
+| `OnMessage` | `EventCallback<string>` | Fired on message (raw JSON) |
+| `OnValidatedMessage` | `EventCallback<IframeMessage>` | Fired on validated message |
+| `OnSecurityViolation` | `EventCallback<IframeMessage>` | Fired on security violation |
+| `OnNavigation` | `EventCallback<NavigationEvent>` | Fired on navigation |
+| `OnUrlChanged` | `EventCallback<string>` | Fired on URL change |
+| `OnMessageSent` | `EventCallback<string>` | Fired when message sent |
+| `OnMessageSendFailed` | `EventCallback<Exception>` | Fired on send failure |
+| `OnCspHeaderGenerated` | `EventCallback<CspHeader>` | Fired when CSP generated |
+| `OnInitializationError` | `EventCallback<Exception>` | Fired on init failure |
 
 ## Demo
 

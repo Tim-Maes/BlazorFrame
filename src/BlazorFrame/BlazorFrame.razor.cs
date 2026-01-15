@@ -17,19 +17,44 @@ public partial class BlazorFrame : IAsyncDisposable
     private List<string> computedAllowedOrigins = new();
     private bool isInitialized = false;
     private readonly object initializationLock = new();
+    private string currentSrcKey = string.Empty;
 
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
     [Inject] private ILogger<BlazorFrame>? Logger { get; set; }
 
+    /// <summary>
+    /// The URL to load in the iframe
+    /// </summary>
     [Parameter] public string Src { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The width of the iframe. Default is "100%".
+    /// </summary>
     [Parameter] public string Width { get; set; } = "100%";
+    
+    /// <summary>
+    /// The height of the iframe. Default is "600px".
+    /// </summary>
     [Parameter] public string Height { get; set; } = "600px";
+    
+    /// <summary>
+    /// Enable automatic height adjustment based on iframe content. Default is true.
+    /// </summary>
     [Parameter] public bool EnableAutoResize { get; set; } = true;
+    
+    /// <summary>
+    /// Enable scrolling on the iframe wrapper. Default is false.
+    /// </summary>
     [Parameter] public bool EnableScroll { get; set; } = false;
 
     /// <summary>
-    /// Enable navigation event tracking to capture URL changes with parameters
-    /// Note: Only works for same-origin iframes due to browser security restrictions
+    /// Configuration options for auto-resize behavior including min/max height, polling interval, and debouncing.
+    /// </summary>
+    [Parameter] public ResizeOptions? ResizeOptions { get; set; }
+
+    /// <summary>
+    /// Enable navigation event tracking to capture URL changes with parameters.
+    /// Note: Only works for same-origin iframes due to browser security restrictions.
     /// </summary>
     [Parameter] public bool EnableNavigationTracking { get; set; } = false;
 
@@ -50,7 +75,14 @@ public partial class BlazorFrame : IAsyncDisposable
     /// </summary>
     [Parameter] public CspOptions? CspOptions { get; set; }
 
+    /// <summary>
+    /// Event fired when the iframe loads
+    /// </summary>
     [Parameter] public EventCallback OnLoad { get; set; }
+    
+    /// <summary>
+    /// Event fired when a message is received (raw JSON string)
+    /// </summary>
     [Parameter] public EventCallback<string> OnMessage { get; set; }
 
     /// <summary>
@@ -107,6 +139,11 @@ public partial class BlazorFrame : IAsyncDisposable
     private string? EffectiveSandboxValue => SecurityOptions.GetEffectiveSandboxValue();
 
     /// <summary>
+    /// Gets a unique key for the iframe element to force re-render when needed
+    /// </summary>
+    private string IframeKey => currentSrcKey;
+
+    /// <summary>
     /// Gets combined iframe attributes including sandbox and additional attributes
     /// </summary>
     private Dictionary<string, object> IframeAttributes
@@ -130,6 +167,54 @@ public partial class BlazorFrame : IAsyncDisposable
             
             return attributes;
         }
+    }
+
+    /// <summary>
+    /// Reloads the iframe content by forcing a re-render of the iframe element.
+    /// This is useful for refreshing content like PDFs without reloading the entire component.
+    /// </summary>
+    /// <returns>A task that completes when the reload is initiated</returns>
+    public async Task ReloadAsync()
+    {
+        Logger?.LogDebug("BlazorFrame: Reloading iframe for {Src}", Src);
+        
+        // Generate a new key to force iframe re-render
+        currentSrcKey = Guid.NewGuid().ToString("N");
+        
+        // Reset initialization state so JS will reinitialize
+        lock (initializationLock)
+        {
+            isInitialized = false;
+        }
+        
+        // Cleanup existing JS resources
+        if (module is not null)
+        {
+            try
+            {
+                await module.InvokeVoidAsync("cleanup", iframeElement);
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogDebug(ex, "BlazorFrame: Cleanup during reload (expected if iframe was cross-origin)");
+            }
+        }
+        
+        StateHasChanged();
+        
+        // The iframe will reinitialize on the next render cycle via OnAfterRenderAsync
+    }
+
+    /// <summary>
+    /// Reloads the iframe with a new source URL.
+    /// </summary>
+    /// <param name="newSrc">The new URL to load</param>
+    /// <returns>A task that completes when the reload is initiated</returns>
+    public async Task ReloadAsync(string newSrc)
+    {
+        Src = newSrc;
+        UpdateAllowedOrigins();
+        await ReloadAsync();
     }
 
     /// <summary>
@@ -375,7 +460,7 @@ public partial class BlazorFrame : IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || isInitialized) return;
+        if (isInitialized) return;
         
         lock (initializationLock)
         {
@@ -390,13 +475,28 @@ public partial class BlazorFrame : IAsyncDisposable
               "/_content/BlazorFrame/BlazorFrame.js");
             objRef = DotNetObjectReference.Create(this);
             
+            // Build resize options object to pass to JS
+            object? resizeOptionsJs = null;
+            if (ResizeOptions != null)
+            {
+                resizeOptionsJs = new
+                {
+                    minHeight = ResizeOptions.MinHeight,
+                    maxHeight = ResizeOptions.MaxHeight,
+                    pollingInterval = ResizeOptions.PollingInterval,
+                    useResizeObserver = ResizeOptions.UseResizeObserver,
+                    debounceMs = ResizeOptions.DebounceMs
+                };
+            }
+            
             await module.InvokeVoidAsync(
               "initialize",
               iframeElement,
               objRef,
               EnableAutoResize,
               computedAllowedOrigins.ToArray(),
-              EnableNavigationTracking);
+              EnableNavigationTracking,
+              resizeOptionsJs);
               
             Logger?.LogDebug("BlazorFrame initialized successfully for {Src} with navigation tracking: {NavigationEnabled}", Src, EnableNavigationTracking);
             
@@ -504,14 +604,17 @@ public partial class BlazorFrame : IAsyncDisposable
     {
         try
         {
-            if (h > 0 && h <= 50000)
+            var maxHeight = ResizeOptions?.MaxHeight ?? 50000;
+            var minHeight = ResizeOptions?.MinHeight ?? 0;
+            
+            if (h >= minHeight && h <= maxHeight)
             {
                 Height = $"{h}px";
                 StateHasChanged();
             }
             else
             {
-                Logger?.LogWarning("BlazorFrame received invalid height value: {Height}", h);
+                Logger?.LogWarning("BlazorFrame received height value outside configured range: {Height} (min: {Min}, max: {Max})", h, minHeight, maxHeight);
             }
         }
         catch (Exception ex)
@@ -599,8 +702,19 @@ public partial class BlazorFrame : IAsyncDisposable
     {
         try
         {
-            if (module is not null) 
+            if (module is not null)
+            {
+                try
+                {
+                    await module.InvokeVoidAsync("cleanup", iframeElement);
+                }
+                catch
+                {
+                    // Ignore cleanup errors during disposal
+                }
+                
                 await module.DisposeAsync();
+            }
         }
         catch (Exception ex)
         {

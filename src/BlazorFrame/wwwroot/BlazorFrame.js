@@ -1,5 +1,15 @@
-export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = [], enableNavigation = false) {
+export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = [], enableNavigation = false, resizeOptions = null) {
     console.log('BlazorFrame: Initializing with origins:', allowedOrigins, 'navigation:', enableNavigation);
+    
+    const defaultResizeOptions = {
+        minHeight: 100,
+        maxHeight: 50000,
+        pollingInterval: 500,
+        useResizeObserver: true,
+        debounceMs: 100
+    };
+    
+    const resizeConfig = resizeOptions ? { ...defaultResizeOptions, ...resizeOptions } : defaultResizeOptions;
     
     let cleanupFunctions = [];
     let lastUrl = '';
@@ -153,7 +163,7 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
                         win.history.replaceState = function(...args) {
                             originalReplaceState.apply(this, args);
                             setTimeout(() => trackNavigation('replacestate'), 0);
-                        },
+                        };
                         
                         console.log('BlazorFrame: Advanced navigation tracking set up successfully');
                     }
@@ -171,11 +181,12 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
     console.log('BlazorFrame: Message listener added');
 
     if (enableResize) {
-        console.log('BlazorFrame: Auto-resize enabled');
+        console.log('BlazorFrame: Auto-resize enabled with options:', resizeConfig);
         
         let resizeObserver;
         let fallbackInterval;
         let lastHeight = 0;
+        let debounceTimer = null;
         
         function updateHeight() {
             try {
@@ -184,16 +195,20 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
                     return false;
                 }
 
-                const height = Math.max(
+                let height = Math.max(
                     doc.documentElement?.scrollHeight || 0,
                     doc.body?.scrollHeight || 0,
                     doc.documentElement?.offsetHeight || 0,
                     doc.body?.offsetHeight || 0
                 );
+                
+                // Apply min/max constraints
+                height = Math.max(resizeConfig.minHeight, Math.min(resizeConfig.maxHeight, height));
 
                 if (height > 0 && height !== lastHeight) {
                     iframe.style.height = height + 'px';
                     lastHeight = height;
+                    dotNetHelper.invokeMethodAsync('Resize', height);
                 }
                 return true;
             } catch (error) {
@@ -201,16 +216,28 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
                 return false;
             }
         }
+        
+        function debouncedUpdateHeight() {
+            if (resizeConfig.debounceMs > 0) {
+                if (debounceTimer) {
+                    clearTimeout(debounceTimer);
+                }
+                debounceTimer = setTimeout(updateHeight, resizeConfig.debounceMs);
+            } else {
+                updateHeight();
+            }
+        }
 
-        if (window.ResizeObserver) {
+        if (resizeConfig.useResizeObserver && window.ResizeObserver) {
             try {
                 const doc = iframe.contentDocument || iframe.contentWindow?.document;
                 if (doc && doc.body) {
                     resizeObserver = new ResizeObserver(() => {
-                        updateHeight();
+                        debouncedUpdateHeight();
                     });
                     resizeObserver.observe(doc.body);
                     resizeObserver.observe(doc.documentElement);
+                    console.log('BlazorFrame: Using ResizeObserver for auto-resize');
                 }
             } catch (error) {
                 resizeObserver = null;
@@ -218,14 +245,18 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
         }
 
         if (!resizeObserver) {
+            console.log('BlazorFrame: Using polling fallback for auto-resize');
             fallbackInterval = setInterval(() => {
                 if (!updateHeight()) {
                     clearInterval(fallbackInterval);
                 }
-            }, 500);
+            }, resizeConfig.pollingInterval);
         }
 
         cleanupFunctions.push(() => {
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
             if (resizeObserver) {
                 resizeObserver.disconnect();
             }
@@ -235,10 +266,43 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
         });
     }
 
-    return () => {
-        cleanupFunctions.forEach(cleanup => cleanup());
+    // Store cleanup function on the iframe element for later retrieval
+    const cleanupFn = () => {
+        cleanupFunctions.forEach(cleanup => {
+            try {
+                cleanup();
+            } catch (error) {
+                console.error('BlazorFrame: Error during cleanup:', error);
+            }
+        });
+        delete iframe._blazorFrameCleanup;
         console.log('BlazorFrame: Cleanup completed');
     };
+    
+    iframe._blazorFrameCleanup = cleanupFn;
+    
+    return cleanupFn;
+}
+
+// Cleanup function that can be called from .NET
+export function cleanup(iframe) {
+    if (iframe && iframe._blazorFrameCleanup) {
+        iframe._blazorFrameCleanup();
+        return true;
+    }
+    return false;
+}
+
+// Reload the iframe by setting the src again
+export function reload(iframe) {
+    if (iframe) {
+        const currentSrc = iframe.src;
+        iframe.src = '';
+        iframe.src = currentSrc;
+        console.log('BlazorFrame: Iframe reloaded');
+        return true;
+    }
+    return false;
 }
 
 // New function for bidirectional communication - sending messages to iframe

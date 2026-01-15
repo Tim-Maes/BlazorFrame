@@ -96,6 +96,53 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
 }
 ```
 
+### ResizeOptions
+**Type:** `ResizeOptions?`  
+**Default:** `null`  
+**Description:** Configuration options for auto-resize behavior including min/max height, polling interval, and debouncing.
+
+```razor
+<!-- Custom resize configuration -->
+<BlazorFrame Src="https://example.com"
+            EnableAutoResize="true"
+            ResizeOptions="@customResizeOptions" />
+
+<!-- Using built-in presets -->
+<BlazorFrame Src="https://example.com"
+            EnableAutoResize="true"
+            ResizeOptions="@ResizeOptions.Performance" />
+
+@code {
+    // Custom configuration
+    private readonly ResizeOptions customResizeOptions = new()
+    {
+        MinHeight = 200,
+        MaxHeight = 1500,
+        PollingInterval = 500,
+        DebounceMs = 100,
+        UseResizeObserver = true
+    };
+}
+```
+
+**ResizeOptions Properties:**
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `MinHeight` | `int` | `100` | Minimum height in pixels |
+| `MaxHeight` | `int` | `50000` | Maximum height in pixels |
+| `PollingInterval` | `int` | `500` | Fallback polling interval (ms) when ResizeObserver is unavailable |
+| `DebounceMs` | `int` | `100` | Debounce delay to prevent excessive updates (set to 0 to disable) |
+| `UseResizeObserver` | `bool` | `true` | Use the modern ResizeObserver API when available |
+
+**Built-in Presets:**
+
+| Preset | PollingInterval | DebounceMs | Best For |
+|--------|-----------------|------------|----------|
+| `ResizeOptions.Default` | 500ms | 100ms | Most use cases |
+| `ResizeOptions.Performance` | 1000ms | 250ms | Many iframes, mobile devices |
+| `ResizeOptions.Responsive` | 250ms | 50ms | Dynamic content, smooth animations |
+
 ### EnableScroll
 **Type:** `bool`  
 **Default:** `false`  
@@ -462,6 +509,135 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
 }
 ```
 
+## Component Methods
+
+### ReloadAsync()
+**Returns:** `Task`  
+**Description:** Reloads the iframe content by forcing a re-render of the iframe element.
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="https://example.com/document.pdf" />
+
+<button @onclick="RefreshContent">Refresh</button>
+
+@code {
+    private BlazorFrame? iframeRef;
+    
+    private async Task RefreshContent()
+    {
+        if (iframeRef != null)
+        {
+            await iframeRef.ReloadAsync();
+        }
+    }
+}
+```
+
+### ReloadAsync(string newSrc)
+**Returns:** `Task`  
+**Description:** Reloads the iframe with a new source URL.
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="@currentUrl" />
+
+@code {
+    private BlazorFrame? iframeRef;
+    private string currentUrl = "https://example.com/doc1.pdf";
+    
+    private async Task LoadDifferentDocument()
+    {
+        if (iframeRef != null)
+        {
+            // Load a new URL with cache-busting
+            var newUrl = $"https://example.com/doc2.pdf?v={DateTime.UtcNow.Ticks}";
+            await iframeRef.ReloadAsync(newUrl);
+        }
+    }
+}
+```
+
+### SendMessageAsync(object data, string? targetOrigin)
+**Returns:** `Task<bool>`  
+**Description:** Sends a message to the iframe content.
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="https://example.com" />
+
+@code {
+    private BlazorFrame? iframeRef;
+    
+    private async Task SendData()
+    {
+        if (iframeRef != null)
+        {
+            var success = await iframeRef.SendMessageAsync(new { action = "update", value = 42 });
+            if (!success)
+            {
+                Console.WriteLine("Failed to send message");
+            }
+        }
+    }
+}
+```
+
+### SendTypedMessageAsync(string messageType, object? data, string? targetOrigin)
+**Returns:** `Task<bool>`  
+**Description:** Sends a typed message to the iframe with automatic timestamp.
+
+```razor
+<BlazorFrame @ref="iframeRef" Src="https://example.com" />
+
+@code {
+    private BlazorFrame? iframeRef;
+    
+    private async Task SendTypedData()
+    {
+        if (iframeRef != null)
+        {
+            await iframeRef.SendTypedMessageAsync("user-update", new { userId = 123, name = "John" });
+        }
+    }
+}
+```
+
+### GetRecommendedCspHeader()
+**Returns:** `CspHeader?`  
+**Description:** Gets the recommended CSP header for the current configuration.
+
+```razor
+@code {
+    private void GetCspHeader()
+    {
+        var cspHeader = iframeRef?.GetRecommendedCspHeader();
+        if (cspHeader != null)
+        {
+            Console.WriteLine($"Header: {cspHeader.HeaderName}");
+            Console.WriteLine($"Value: {cspHeader.HeaderValue}");
+        }
+    }
+}
+```
+
+### ValidateCspConfiguration()
+**Returns:** `CspValidationResult?`  
+**Description:** Validates the current CSP configuration.
+
+```razor
+@code {
+    private void ValidateCsp()
+    {
+        var result = iframeRef?.ValidateCspConfiguration();
+        if (result != null)
+        {
+            foreach (var warning in result.Warnings)
+            {
+                Console.WriteLine($"Warning: {warning}");
+            }
+        }
+    }
+}
+```
+
 ## Styling Parameters
 
 ### AdditionalAttributes
@@ -507,6 +683,7 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
                 Width="100%"
                 Height="@GetResponsiveHeight()"
                 EnableAutoResize="@(!isMobile)"
+                ResizeOptions="@(isMobile ? ResizeOptions.Performance : ResizeOptions.Default)"
                 EnableScroll="@isMobile"
                 SecurityOptions="@GetSecurityOptions()"
                 class="@GetCssClasses()" />
@@ -562,11 +739,57 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
 }
 ```
 
+### PDF Viewer with Refresh
+```razor
+<BlazorFrame @ref="pdfViewer"
+            Src="@pdfUrl"
+            Width="100%"
+            Height="800px"
+            EnableAutoResize="false"
+            EnableScroll="true"
+            OnLoad="HandlePdfLoad" />
+
+<button @onclick="RefreshPdf">Refresh PDF</button>
+<button @onclick="LoadNextPage">Next Document</button>
+
+@code {
+    private BlazorFrame? pdfViewer;
+    private string pdfUrl = "https://example.com/document.pdf";
+    private int currentPage = 1;
+    
+    private async Task RefreshPdf()
+    {
+        if (pdfViewer != null)
+        {
+            // Reload with cache-busting
+            var cacheBustedUrl = $"{pdfUrl}?v={DateTime.UtcNow.Ticks}";
+            await pdfViewer.ReloadAsync(cacheBustedUrl);
+        }
+    }
+    
+    private async Task LoadNextPage()
+    {
+        currentPage++;
+        if (pdfViewer != null)
+        {
+            await pdfViewer.ReloadAsync($"https://example.com/document-{currentPage}.pdf");
+        }
+    }
+    
+    private Task HandlePdfLoad()
+    {
+        Console.WriteLine("PDF loaded successfully");
+        return Task.CompletedTask;
+    }
+}
+```
+
 ### Development-Friendly Configuration
 ```razor
 <BlazorFrame Src="@devUrl"
             Width="100%"
             EnableAutoResize="true"
+            ResizeOptions="@ResizeOptions.Responsive"
             SecurityOptions="@devSecurityOptions"
             OnValidatedMessage="LogDevMessage"
             OnSecurityViolation="LogDevViolation"

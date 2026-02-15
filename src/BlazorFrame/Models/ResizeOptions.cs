@@ -53,4 +53,30 @@ public class ResizeOptions
         PollingInterval = 250,
         DebounceMs = 50
     };
+
+    /// <summary>
+    /// Validates the resize options and returns any errors
+    /// </summary>
+    /// <returns>List of validation error messages, empty if valid</returns>
+    public List<string> Validate()
+    {
+        var errors = new List<string>();
+
+        if (MinHeight < 0)
+            errors.Add("MinHeight must be >= 0.");
+
+        if (MaxHeight <= 0)
+            errors.Add("MaxHeight must be > 0.");
+
+        if (MinHeight >= MaxHeight)
+            errors.Add($"MinHeight ({MinHeight}) must be less than MaxHeight ({MaxHeight}).");
+
+        if (PollingInterval <= 0)
+            errors.Add("PollingInterval must be > 0.");
+
+        if (DebounceMs < 0)
+            errors.Add("DebounceMs must be >= 0.");
+
+        return errors;
+    }
 }

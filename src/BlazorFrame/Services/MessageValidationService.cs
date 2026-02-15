@@ -299,20 +299,27 @@ internal class MessageValidationService
     {
         var cleanJson = JsonCommentRegex.Replace(messageJson, "");
         
-        var suspiciousPatterns = new[]
+        // HTML injection patterns - these are dangerous in any context
+        var htmlPatterns = new[]
         {
             "<script",
             "javascript:",
             "vbscript:",
-            "onload=",
-            "onerror=",
-            "eval(",
-            "Function(",
-            "setTimeout(",
-            "setInterval("
         };
 
-        return suspiciousPatterns.Any(pattern => 
+        // HTML event handler patterns - look for attribute-style injection
+        var eventHandlerPatterns = new[]
+        {
+            "onload=",
+            "onerror=",
+            "onclick=",
+            "onmouseover=",
+            "onfocus=",
+        };
+
+        return htmlPatterns.Any(pattern => 
+            cleanJson.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+            || eventHandlerPatterns.Any(pattern =>
             cleanJson.Contains(pattern, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -327,7 +334,7 @@ internal class MessageValidationService
         return messageType.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '.');
     }
 
-    private static IframeMessage CreateInvalidMessage(string origin, string messageJson, string error)
+    private static IframeMessage CreateInvalidMessage(string origin, string messageJson, string? error)
     {
         return new IframeMessage
         {

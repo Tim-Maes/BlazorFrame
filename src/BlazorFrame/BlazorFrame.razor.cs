@@ -370,6 +370,7 @@ public partial class BlazorFrame : IAsyncDisposable
         UpdateAllowedOrigins();
         ValidateConfiguration();
         ValidateSrcUrl();
+        ValidateResizeOptions();
     }
 
     private void ValidateConfiguration()
@@ -405,7 +406,7 @@ public partial class BlazorFrame : IAsyncDisposable
                     MessageType = "configuration-validation"
                 };
 
-                _ = Task.Run(async () =>
+                _ = InvokeAsync(async () =>
                 {
                     try
                     {
@@ -444,7 +445,7 @@ public partial class BlazorFrame : IAsyncDisposable
                 MessageType = "url-validation"
             };
 
-            _ = Task.Run(async () =>
+            _ = InvokeAsync(async () =>
             {
                 try
                 {
@@ -455,6 +456,18 @@ public partial class BlazorFrame : IAsyncDisposable
                     Logger?.LogError(ex, "Error invoking security violation callback for URL validation");
                 }
             });
+        }
+    }
+
+    private void ValidateResizeOptions()
+    {
+        if (ResizeOptions == null)
+            return;
+
+        var errors = ResizeOptions.Validate();
+        foreach (var error in errors)
+        {
+            Logger?.LogError("BlazorFrame ResizeOptions validation error: {Error}", error);
         }
     }
 
@@ -725,5 +738,7 @@ public partial class BlazorFrame : IAsyncDisposable
             objRef?.Dispose();
             isInitialized = false;
         }
+        
+        GC.SuppressFinalize(this);
     }
 }

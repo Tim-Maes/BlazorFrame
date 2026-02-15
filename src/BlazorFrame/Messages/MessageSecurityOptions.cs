@@ -6,11 +6,6 @@
 public class MessageSecurityOptions
 {
     /// <summary>
-    /// List of allowed origins. If null or empty, will auto-derive from Src URL.
-    /// </summary>
-    public List<string>? AllowedOrigins { get; set; }
-
-    /// <summary>
     /// Whether to perform strict message format validation
     /// </summary>
     public bool EnableStrictValidation { get; set; } = true;

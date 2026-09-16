@@ -19,7 +19,10 @@ public class MessageSecurityOptions
     public int MaxArrayElements { get; set; } = 1000;
     
     // Protocol and custom validation
-    public bool AllowScriptProtocols { get; set; } = false;
+    public bool AllowDataUrls { get; set; } = false;
+    public bool AllowBlobUrls { get; set; } = true;
+    public string? CapabilityToken { get; set; }
+    public int HandshakeTimeoutMs { get; set; } = 5000;
     public Func<string, string, bool>? CustomValidator { get; set; }
     
     // Sandbox security (v2.1+)
@@ -166,24 +169,15 @@ var options = new MessageSecurityOptions
 
 ### Protocol and Custom Validation
 
-#### AllowScriptProtocols
+#### AllowDataUrls
 
 **Type:** `bool`  
 **Default:** `false`  
-**Description:** Whether to allow JavaScript protocol URLs (javascript:, vbscript:, etc.).
+**Description:** Explicitly allow data URLs. Data URLs have opaque origins and cannot use normal origin-based messaging.
 
 ```csharp
 // Generally should remain false for security
-var options = new MessageSecurityOptions
-{
-    AllowScriptProtocols = false  // Block javascript: URLs
-};
-
-// Only enable if absolutely necessary
-var legacyOptions = new MessageSecurityOptions
-{
-    AllowScriptProtocols = true  // Security risk
-};
+var options = new MessageSecurityOptions { AllowDataUrls = true };
 ```
 
 #### CustomValidator
@@ -426,7 +420,7 @@ var production = new MessageSecurityOptions
     MaxJsonDepth = 5,
     MaxObjectProperties = 50,
     MaxArrayElements = 100,
-    AllowScriptProtocols = false,
+    AllowDataUrls = false,
     SandboxPreset = SandboxPreset.Strict,
     EnableSandbox = true,
     RequireHttps = true,
@@ -442,7 +436,7 @@ var development = new MessageSecurityOptions
     EnableStrictValidation = false,
     MaxMessageSize = 128 * 1024,
     MaxJsonDepth = 20,
-    AllowScriptProtocols = false,
+    AllowDataUrls = false,
     SandboxPreset = SandboxPreset.Permissive,
     EnableSandbox = true,
     RequireHttps = false,
@@ -461,7 +455,7 @@ var payment = new MessageSecurityOptions
     MaxJsonDepth = 3,
     MaxObjectProperties = 20,
     MaxArrayElements = 50,
-    AllowScriptProtocols = false,
+    AllowDataUrls = false,
     SandboxPreset = SandboxPreset.Strict,
     EnableSandbox = true,
     RequireHttps = true,
@@ -541,7 +535,7 @@ var invalid = new MessageSecurityOptions
 // Warning: Insecure configuration
 var insecure = new MessageSecurityOptions
 {
-    AllowScriptProtocols = true,  // Warning: Allows dangerous URLs
+    AllowDataUrls = true,         // Use only for trusted opaque-origin content
     EnableStrictValidation = false // Warning: Reduces security
 };
 ```

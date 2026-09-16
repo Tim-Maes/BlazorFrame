@@ -33,9 +33,11 @@ Welcome to the comprehensive documentation for **BlazorFrame** - the enhanced, s
 
 ---
 
-## What's New in v2.1
+## v3 Highlights
 
-BlazorFrame v2.1 introduces powerful new security features:
+BlazorFrame v3 introduces strict source enforcement, browser-compatible origin normalization,
+lifecycle-safe JavaScript reinitialization, modern iframe attributes, optional capability
+handshakes, and host-owned CSP response integration through `BlazorFrame.AspNetCore`.
 
 ### Sandbox Security
 

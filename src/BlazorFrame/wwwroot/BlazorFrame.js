@@ -1,5 +1,9 @@
-export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = [], enableNavigation = false, resizeOptions = null) {
-    console.log('BlazorFrame: Initializing with origins:', allowedOrigins, 'navigation:', enableNavigation);
+export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = [], enableNavigation = false, resizeOptions = null, capabilityToken = null, handshakeTimeoutMs = 5000) {
+    const sourceAttribute = iframe.getAttribute('src') || '';
+    if (allowedOrigins.length === 0 && iframe.src &&
+        (!/^[a-z][a-z0-9+.-]*:/i.test(sourceAttribute) || sourceAttribute.toLowerCase() === 'about:blank')) {
+        allowedOrigins = [window.location.origin];
+    }
     
     const defaultResizeOptions = {
         minHeight: 100,
@@ -13,15 +17,32 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
     
     let cleanupFunctions = [];
     let lastUrl = '';
+    let handshakeTimer = null;
+    let handshakeChallenge = null;
     
     function isOriginAllowed(origin) {
         if (!allowedOrigins || allowedOrigins.length === 0) {
-            console.warn('BlazorFrame: No allowed origins specified');
             return false;
         }
         return allowedOrigins.some(allowed => 
             allowed.toLowerCase() === origin.toLowerCase()
         );
+    }
+
+    function sendHandshakeChallenge() {
+        if (!capabilityToken || !iframe.contentWindow) return;
+
+        const targetOrigin = allowedOrigins.find(origin => origin !== 'null') || '*';
+        const challenge = `${Date.now().toString(36)}-${crypto.randomUUID()}`;
+        handshakeChallenge = challenge;
+        dotNetHelper.invokeMethodAsync('OnHandshakeChallenge', challenge);
+        iframe.contentWindow.postMessage({
+            type: 'blazorframe.handshake.challenge',
+            challenge
+        }, targetOrigin);
+
+        handshakeTimer = setTimeout(() => {
+        }, handshakeTimeoutMs);
     }
 
     function parseUrl(url) {
@@ -84,12 +105,18 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
         }
 
         if (!isOriginAllowed(event.origin)) {
-            console.warn(`BlazorFrame: Rejected message from unauthorized origin: ${event.origin}`);
+            return;
+        }
+
+        if (capabilityToken && event.data?.type === 'blazorframe.handshake.ack') {
+            if (event.data.challenge !== handshakeChallenge || event.data.token !== capabilityToken) {
+                return;
+            }
+            dotNetHelper.invokeMethodAsync('OnIframeMessage', event.origin, JSON.stringify(event.data));
             return;
         }
 
         if (event.data === null || event.data === undefined) {
-            console.warn('BlazorFrame: Rejected null/undefined message data');
             return;
         }
 
@@ -178,7 +205,15 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
 
     window.addEventListener('message', onMessage);
     cleanupFunctions.push(() => window.removeEventListener('message', onMessage));
-    console.log('BlazorFrame: Message listener added');
+    iframe.addEventListener('load', sendHandshakeChallenge);
+    cleanupFunctions.push(() => iframe.removeEventListener('load', sendHandshakeChallenge));
+    cleanupFunctions.push(() => {
+        if (handshakeTimer) {
+            clearTimeout(handshakeTimer);
+            handshakeTimer = null;
+        }
+    });
+    sendHandshakeChallenge();
 
     if (enableResize) {
         console.log('BlazorFrame: Auto-resize enabled with options:', resizeConfig);
@@ -263,6 +298,9 @@ export function initialize(iframe, dotNetHelper, enableResize, allowedOrigins = 
             if (fallbackInterval) {
                 clearInterval(fallbackInterval);
             }
+            if (handshakeTimer) {
+                clearTimeout(handshakeTimer);
+            }
         });
     }
 
@@ -312,15 +350,11 @@ export function sendMessage(iframe, messageJson, targetOrigin) {
         return false;
     }
 
-    if (!targetOrigin) {
-        console.warn('BlazorFrame: Cannot send message - target origin not specified');
-        return false;
-    }
+    const effectiveTargetOrigin = targetOrigin ?? window.location.origin;
 
     try {
         const messageData = JSON.parse(messageJson);
-        iframe.contentWindow.postMessage(messageData, targetOrigin);
-        console.log('BlazorFrame: Message sent to iframe:', targetOrigin);
+        iframe.contentWindow.postMessage(messageData, effectiveTargetOrigin);
         return true;
     } catch (error) {
         console.error('BlazorFrame: Failed to send message to iframe:', error);

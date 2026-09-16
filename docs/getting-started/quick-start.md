@@ -22,7 +22,7 @@ dotnet add package BlazorFrame
 
 ### Via PackageReference
 ```xml
-<PackageReference Include="BlazorFrame" Version="2.1.0" />
+<PackageReference Include="BlazorFrame" Version="3.0.0" />
 ```
 
 ## Basic Setup
@@ -108,7 +108,7 @@ That's it! You now have a secure, auto-resizing iframe with built-in origin vali
 }
 ```
 
-### Using Fluent Configuration (New in v2.1)
+### Using Fluent Configuration
 
 ```razor
 @code {

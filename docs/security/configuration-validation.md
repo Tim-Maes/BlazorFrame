@@ -459,7 +459,6 @@ public class ConfigurationValidationResult
 | `RequireHttps && AllowInsecureConnections` | "RequireHttps is true but AllowInsecureConnections is also true..." |
 | `!EnableSandbox && !string.IsNullOrEmpty(Sandbox)` | "EnableSandbox is false but Sandbox property is set..." |
 | `!EnableSandbox && SandboxPreset != None` | "EnableSandbox is false but SandboxPreset is set..." |
-| `AllowScriptProtocols` | "AllowScriptProtocols=true allows dangerous URLs..." |
 | `!EnableStrictValidation` | "EnableStrictValidation=false reduces security..." |
 
 ### Suggestion Conditions

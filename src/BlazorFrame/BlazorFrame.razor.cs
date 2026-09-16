@@ -13,11 +13,14 @@ public partial class BlazorFrame : IAsyncDisposable
     private IJSObjectReference? module;
     private DotNetObjectReference<BlazorFrame>? objRef;
     private readonly MessageValidationService validationService = new();
-    private readonly CspBuilderService cspBuilderService = new();
     private List<string> computedAllowedOrigins = new();
     private bool isInitialized = false;
     private readonly object initializationLock = new();
     private string currentSrcKey = string.Empty;
+    private string? lastConfigurationSignature;
+    private bool sourceRejected;
+    private bool capabilityHandshakeComplete;
+    private string? expectedHandshakeChallenge;
 
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
     [Inject] private ILogger<BlazorFrame>? Logger { get; set; }
@@ -36,6 +39,31 @@ public partial class BlazorFrame : IAsyncDisposable
     /// The height of the iframe. Default is "600px".
     /// </summary>
     [Parameter] public string Height { get; set; } = "600px";
+
+    /// <summary>
+    /// Accessible label for the iframe. A title is strongly recommended for screen-reader users.
+    /// </summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>
+    /// Controls native browser lazy loading. Defaults to eager loading.
+    /// </summary>
+    [Parameter] public string Loading { get; set; } = "eager";
+
+    /// <summary>
+    /// Referrer policy applied to the iframe request.
+    /// </summary>
+    [Parameter] public string? ReferrerPolicy { get; set; }
+
+    /// <summary>
+    /// Permissions policy for iframe features such as fullscreen, camera, or payment.
+    /// </summary>
+    [Parameter] public string? Allow { get; set; }
+
+    /// <summary>
+    /// Loads the frame without ambient cookies and storage when supported by the browser.
+    /// </summary>
+    [Parameter] public bool Credentialless { get; set; }
     
     /// <summary>
     /// Enable automatic height adjustment based on iframe content. Default is true.
@@ -70,12 +98,6 @@ public partial class BlazorFrame : IAsyncDisposable
     [Parameter] public MessageSecurityOptions SecurityOptions { get; set; } = new();
 
     /// <summary>
-    /// Content Security Policy options for iframe security.
-    /// When provided, CSP header recommendations will be generated.
-    /// </summary>
-    [Parameter] public CspOptions? CspOptions { get; set; }
-
-    /// <summary>
     /// Event fired when the iframe loads
     /// </summary>
     [Parameter] public EventCallback OnLoad { get; set; }
@@ -99,11 +121,6 @@ public partial class BlazorFrame : IAsyncDisposable
     /// Event fired when JavaScript initialization fails
     /// </summary>
     [Parameter] public EventCallback<Exception> OnInitializationError { get; set; }
-
-    /// <summary>
-    /// Event fired when CSP header is generated, allowing the application to apply it
-    /// </summary>
-    [Parameter] public EventCallback<CspHeader> OnCspHeaderGenerated { get; set; }
 
     /// <summary>
     /// Event fired when a message is successfully sent to the iframe
@@ -143,6 +160,8 @@ public partial class BlazorFrame : IAsyncDisposable
     /// </summary>
     private string IframeKey => currentSrcKey;
 
+    private string EffectiveSrc => sourceRejected ? "about:blank" : Src;
+
     /// <summary>
     /// Gets combined iframe attributes including sandbox and additional attributes
     /// </summary>
@@ -151,18 +170,29 @@ public partial class BlazorFrame : IAsyncDisposable
         get
         {
             var attributes = new Dictionary<string, object>(AdditionalAttributes);
+
+            attributes["src"] = EffectiveSrc;
+
+            if (!string.IsNullOrWhiteSpace(Title))
+                attributes["title"] = Title;
+            if (!string.IsNullOrWhiteSpace(Loading))
+                attributes["loading"] = Loading;
+            if (!string.IsNullOrWhiteSpace(ReferrerPolicy))
+                attributes["referrerpolicy"] = ReferrerPolicy;
+            if (!string.IsNullOrWhiteSpace(Allow))
+                attributes["allow"] = Allow;
+            if (Credentialless)
+                attributes["credentialless"] = true;
             
             var sandboxValue = EffectiveSandboxValue;
             if (!string.IsNullOrEmpty(sandboxValue))
             {
-                if (!attributes.ContainsKey("sandbox"))
+                if (attributes.ContainsKey("sandbox"))
                 {
-                    attributes["sandbox"] = sandboxValue;
+                    Logger?.LogWarning("BlazorFrame: sandbox attribute in AdditionalAttributes is replaced by SecurityOptions");
                 }
-                else
-                {
-                    Logger?.LogWarning("BlazorFrame: sandbox attribute in AdditionalAttributes overrides SecurityOptions sandbox configuration");
-                }
+
+                attributes["sandbox"] = sandboxValue;
             }
             
             return attributes;
@@ -188,17 +218,7 @@ public partial class BlazorFrame : IAsyncDisposable
         }
         
         // Cleanup existing JS resources
-        if (module is not null)
-        {
-            try
-            {
-                await module.InvokeVoidAsync("cleanup", iframeElement);
-            }
-            catch (Exception ex)
-            {
-                Logger?.LogDebug(ex, "BlazorFrame: Cleanup during reload (expected if iframe was cross-origin)");
-            }
-        }
+        await CleanupJavaScriptAsync();
         
         StateHasChanged();
         
@@ -214,6 +234,7 @@ public partial class BlazorFrame : IAsyncDisposable
     {
         Src = newSrc;
         UpdateAllowedOrigins();
+        ValidateSource();
         await ReloadAsync();
     }
 
@@ -244,7 +265,20 @@ public partial class BlazorFrame : IAsyncDisposable
         try
         {
             // Use specified target origin or derive from Src
-            var effectiveOrigin = targetOrigin ?? validationService.ExtractOrigin(Src);
+            var usesDocumentOrigin = targetOrigin is null && UsesDocumentOrigin(Src);
+            var usesOpaqueOrigin = targetOrigin is null && Src.StartsWith("data:", StringComparison.OrdinalIgnoreCase);
+            var effectiveOrigin = targetOrigin is null
+                ? validationService.ExtractOrigin(Src)
+                : validationService.NormalizeOrigin(targetOrigin);
+            var validationOrigin = effectiveOrigin;
+            if (usesDocumentOrigin)
+            {
+                effectiveOrigin = "https://__blazorframe_document_origin__";
+                validationOrigin = "https://__blazorframe_document_origin__";
+            }
+            if (usesOpaqueOrigin && SecurityOptions.AllowDataUrls)
+                effectiveOrigin = "*";
+
             if (string.IsNullOrEmpty(effectiveOrigin))
             {
                 var ex = new ArgumentException($"Cannot determine valid origin from Src: {Src}");
@@ -254,7 +288,7 @@ public partial class BlazorFrame : IAsyncDisposable
             }
 
             // Validate target origin is allowed
-            if (!computedAllowedOrigins.Contains(effectiveOrigin, StringComparer.OrdinalIgnoreCase))
+            if (!usesDocumentOrigin && !usesOpaqueOrigin && !computedAllowedOrigins.Contains(effectiveOrigin, StringComparer.Ordinal))
             {
                 var ex = new UnauthorizedAccessException($"Target origin '{effectiveOrigin}' is not in allowed origins list");
                 Logger?.LogWarning(ex, "Attempted to send message to unauthorized origin");
@@ -272,9 +306,9 @@ public partial class BlazorFrame : IAsyncDisposable
             if (SecurityOptions.EnableStrictValidation)
             {
                 var validationResult = validationService.ValidateMessage(
-                    effectiveOrigin, 
+                    usesOpaqueOrigin ? "null" : validationOrigin!,
                     messageJson, 
-                    computedAllowedOrigins, 
+                    usesDocumentOrigin ? new[] { validationOrigin! } : computedAllowedOrigins,
                     SecurityOptions);
 
                 if (!validationResult.IsValid)
@@ -287,7 +321,7 @@ public partial class BlazorFrame : IAsyncDisposable
             }
 
             // Send message via JavaScript
-            var success = await module.InvokeAsync<bool>("sendMessage", iframeElement, messageJson, effectiveOrigin);
+            var success = await module.InvokeAsync<bool>("sendMessage", iframeElement, messageJson, usesDocumentOrigin ? null : effectiveOrigin);
             
             if (success)
             {
@@ -330,46 +364,12 @@ public partial class BlazorFrame : IAsyncDisposable
         return await SendMessageAsync(message, targetOrigin);
     }
 
-    /// <summary>
-    /// Gets the recommended CSP header for the current configuration
-    /// </summary>
-    /// <returns>CSP header or null if CSP is not configured</returns>
-    public CspHeader? GetRecommendedCspHeader()
-    {
-        if (CspOptions == null) return null;
-        
-        var iframeSources = new List<string>();
-        if (!string.IsNullOrEmpty(Src))
-        {
-            iframeSources.Add(Src);
-        }
-        
-        return cspBuilderService.BuildCspHeader(CspOptions, iframeSources);
-    }
-
-    /// <summary>
-    /// Validates the current CSP configuration
-    /// </summary>
-    /// <returns>CSP validation result or null if CSP is not configured</returns>
-    public CspValidationResult? ValidateCspConfiguration()
-    {
-        if (CspOptions == null) return null;
-        
-        return cspBuilderService.ValidateCspOptions(CspOptions);
-    }
-
-    /// <summary>
-    /// Gets CSP helper methods for creating common configurations
-    /// </summary>
-    /// <returns>CSP builder service for advanced configuration</returns>
-    public CspBuilderService GetCspBuilder() => cspBuilderService;
-
     protected override void OnParametersSet()
     {
         base.OnParametersSet();
         UpdateAllowedOrigins();
+        ValidateSource();
         ValidateConfiguration();
-        ValidateSrcUrl();
         ValidateResizeOptions();
     }
 
@@ -425,20 +425,22 @@ public partial class BlazorFrame : IAsyncDisposable
         }
     }
 
-    private void ValidateSrcUrl()
+    private void ValidateSource()
     {
-        if (string.IsNullOrEmpty(Src))
+        sourceRejected = string.IsNullOrWhiteSpace(Src);
+        if (string.IsNullOrWhiteSpace(Src))
             return;
 
         var urlValidation = validationService.ValidateUrl(Src, SecurityOptions);
         if (!urlValidation.IsValid)
         {
+            sourceRejected = true;
             Logger?.LogWarning("BlazorFrame Src URL validation failed: {Error}. URL: {Src}", 
                 urlValidation.ErrorMessage, Src);
 
             var violationMessage = new IframeMessage
             {
-                Origin = Src,
+                Origin = "configuration",
                 Data = $"URL validation failed: {urlValidation.ErrorMessage}",
                 IsValid = false,
                 ValidationError = urlValidation.ErrorMessage,
@@ -473,19 +475,25 @@ public partial class BlazorFrame : IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (isInitialized) return;
-        
-        lock (initializationLock)
+        var configurationSignature = GetConfigurationSignature();
+        if (isInitialized && string.Equals(lastConfigurationSignature, configurationSignature, StringComparison.Ordinal))
+            return;
+
+        if (isInitialized)
         {
-            if (isInitialized) return;
-            isInitialized = true;
+            await CleanupJavaScriptAsync();
         }
         
         try
         {
+            lock (initializationLock)
+            {
+                isInitialized = true;
+            }
+
             module = await JSRuntime.InvokeAsync<IJSObjectReference>(
               "import",
-              "/_content/BlazorFrame/BlazorFrame.js");
+              "./_content/BlazorFrame/BlazorFrame.js");
             objRef = DotNetObjectReference.Create(this);
             
             // Build resize options object to pass to JS
@@ -509,12 +517,14 @@ public partial class BlazorFrame : IAsyncDisposable
               EnableAutoResize,
               computedAllowedOrigins.ToArray(),
               EnableNavigationTracking,
-              resizeOptionsJs);
+              resizeOptionsJs,
+              SecurityOptions.CapabilityToken,
+              SecurityOptions.HandshakeTimeoutMs);
+
+            lastConfigurationSignature = configurationSignature;
               
             Logger?.LogDebug("BlazorFrame initialized successfully for {Src} with navigation tracking: {NavigationEnabled}", Src, EnableNavigationTracking);
             
-            // Generate and fire CSP header event if configured
-            await HandleCspHeaderGeneration();
         }
         catch (Exception ex)
         {
@@ -526,39 +536,6 @@ public partial class BlazorFrame : IAsyncDisposable
             }
             
             await OnInitializationError.InvokeAsync(ex);
-        }
-    }
-
-    private async Task HandleCspHeaderGeneration()
-    {
-        try
-        {
-            var cspHeader = GetRecommendedCspHeader();
-            if (cspHeader != null)
-            {
-                Logger?.LogDebug("Generated CSP header for BlazorFrame: {Header}", cspHeader.HeaderValue);
-                
-                // Validate CSP configuration and log warnings
-                var validationResult = ValidateCspConfiguration();
-                if (validationResult != null)
-                {
-                    foreach (var warning in validationResult.Warnings)
-                    {
-                        Logger?.LogWarning("CSP Warning: {Warning}", warning);
-                    }
-                    
-                    foreach (var suggestion in validationResult.Suggestions)
-                    {
-                        Logger?.LogInformation("CSP Suggestion: {Suggestion}", suggestion);
-                    }
-                }
-                
-                await OnCspHeaderGenerated.InvokeAsync(cspHeader);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger?.LogError(ex, "Error generating CSP header for BlazorFrame");
         }
     }
 
@@ -575,18 +552,40 @@ public partial class BlazorFrame : IAsyncDisposable
     }
 
     [JSInvokable]
+    public void OnHandshakeChallenge(string challenge)
+    {
+        expectedHandshakeChallenge = challenge;
+        capabilityHandshakeComplete = false;
+    }
+
+    [JSInvokable]
     public async Task OnIframeMessage(string origin, string messageJson)
     {
         try
         {
+            IReadOnlyList<string> allowedOrigins = UsesDocumentOrigin(Src) && AllowedOrigins is null
+                ? new[] { origin }
+                : computedAllowedOrigins;
             var validatedMessage = validationService.ValidateMessage(
                 origin, 
                 messageJson, 
-                computedAllowedOrigins, 
+                allowedOrigins,
                 SecurityOptions);
 
             if (validatedMessage.IsValid)
             {
+                if (!capabilityHandshakeComplete && !string.IsNullOrEmpty(SecurityOptions.CapabilityToken))
+                {
+                    if (!IsCapabilityAcknowledgement(validatedMessage))
+                    {
+                        await OnSecurityViolation.InvokeAsync(CreateViolation(origin, messageJson, "Capability handshake is incomplete"));
+                        return;
+                    }
+
+                    capabilityHandshakeComplete = true;
+                    return;
+                }
+
                 await OnMessage.InvokeAsync(messageJson);
                 await OnValidatedMessage.InvokeAsync(validatedMessage);
             }
@@ -691,7 +690,17 @@ public partial class BlazorFrame : IAsyncDisposable
 
         if (AllowedOrigins?.Count > 0)
         {
-            computedAllowedOrigins.AddRange(AllowedOrigins);
+            foreach (var origin in AllowedOrigins)
+            {
+                if (origin.Equals("null", StringComparison.OrdinalIgnoreCase))
+                    computedAllowedOrigins.Add("null");
+                else if (validationService.NormalizeOrigin(origin) is { } normalizedOrigin)
+                    computedAllowedOrigins.Add(normalizedOrigin);
+            }
+        }
+        else if (Src.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && SecurityOptions.AllowDataUrls)
+        {
+            computedAllowedOrigins.Add("null");
         }
         else if (!string.IsNullOrEmpty(Src))
         {
@@ -715,19 +724,7 @@ public partial class BlazorFrame : IAsyncDisposable
     {
         try
         {
-            if (module is not null)
-            {
-                try
-                {
-                    await module.InvokeVoidAsync("cleanup", iframeElement);
-                }
-                catch
-                {
-                    // Ignore cleanup errors during disposal
-                }
-                
-                await module.DisposeAsync();
-            }
+            await CleanupJavaScriptAsync();
         }
         catch (Exception ex)
         {
@@ -737,8 +734,85 @@ public partial class BlazorFrame : IAsyncDisposable
         {
             objRef?.Dispose();
             isInitialized = false;
+            lastConfigurationSignature = null;
         }
         
         GC.SuppressFinalize(this);
     }
+
+    private async Task CleanupJavaScriptAsync()
+    {
+        if (module is not null)
+        {
+            try
+            {
+                await module.InvokeVoidAsync("cleanup", iframeElement);
+                await module.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogDebug(ex, "BlazorFrame JavaScript cleanup failed");
+            }
+        }
+
+        objRef?.Dispose();
+        objRef = null;
+        module = null;
+        capabilityHandshakeComplete = false;
+        isInitialized = false;
+    }
+
+    private string GetConfigurationSignature() => string.Join("|",
+        EffectiveSrc,
+        EnableAutoResize,
+        EnableNavigationTracking,
+        string.Join(",", computedAllowedOrigins),
+        ResizeOptions?.MinHeight,
+        ResizeOptions?.MaxHeight,
+        ResizeOptions?.PollingInterval,
+        ResizeOptions?.UseResizeObserver,
+        ResizeOptions?.DebounceMs,
+        SecurityOptions.CapabilityToken,
+        SecurityOptions.HandshakeTimeoutMs);
+
+    private static bool UsesDocumentOrigin(string? source)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+            return false;
+
+        if (source.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return !Uri.TryCreate(source, UriKind.Absolute, out _)
+            && !source.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+            && !source.StartsWith("blob:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsCapabilityAcknowledgement(IframeMessage message)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(message.Data);
+            var root = document.RootElement;
+            return root.TryGetProperty("type", out var type) &&
+                   type.GetString() == "blazorframe.handshake.ack" &&
+                   root.TryGetProperty("token", out var token) &&
+                   string.Equals(token.GetString(), SecurityOptions.CapabilityToken, StringComparison.Ordinal) &&
+                   root.TryGetProperty("challenge", out var challenge) &&
+                   string.Equals(challenge.GetString(), expectedHandshakeChallenge, StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static IframeMessage CreateViolation(string origin, string data, string error) => new()
+    {
+        Origin = origin,
+        Data = data,
+        IsValid = false,
+        ValidationError = error,
+        MessageType = "handshake"
+    };
 }

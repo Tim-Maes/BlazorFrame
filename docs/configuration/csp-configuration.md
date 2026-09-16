@@ -17,9 +17,13 @@ BlazorFrame's CSP features include:
 ### Simple CSP Setup
 
 ```razor
-<BlazorFrame Src="https://widget.example.com"
-            CspOptions="@cspOptions"
-            OnCspHeaderGenerated="ApplyCspHeader" />
+// Install the host integration package in an ASP.NET Core application:
+// dotnet add package BlazorFrame.AspNetCore
+
+// Apply the response header before the response starts.
+HttpContext.Response.ApplyBlazorFrameCsp(
+    cspOptions,
+    new[] { "https://widget.example.com" });
 
 @code {
     private readonly CspOptions cspOptions = new CspOptions()
@@ -27,15 +31,12 @@ BlazorFrame's CSP features include:
         .AllowFrameSources("https://widget.example.com")
         .WithScriptNonce("widget-nonce-123");
     
-    private async Task ApplyCspHeader(CspHeader cspHeader)
-    {
-        // Apply CSP header to HTTP response
-        HttpContext.Response.Headers.Add(cspHeader.HeaderName, cspHeader.HeaderValue);
-        
-        Logger.LogInformation("Applied CSP header: {Header}", cspHeader.HeaderValue);
-    }
 }
 ```
+
+`BlazorFrame` does not apply CSP response headers from a component callback. Response headers
+must be generated and applied by the host before rendering starts. Use the separate
+`BlazorFrame.AspNetCore` package for the `HttpResponse.ApplyBlazorFrameCsp` extension.
 
 ### Environment-Specific CSP
 
@@ -243,9 +244,7 @@ var csp = new CspOptions()
 ### Script Nonces
 
 ```razor
-<BlazorFrame Src="@widgetUrl"
-            CspOptions="@GetCspWithNonce()"
-            OnCspHeaderGenerated="ApplyCspHeader" />
+<BlazorFrame Src="@widgetUrl" />
 
 @code {
     private string currentNonce = "";
@@ -414,9 +413,7 @@ public class CspViolationReport
 ### Real-Time CSP Monitoring
 
 ```razor
-<BlazorFrame Src="@widgetUrl"
-            CspOptions="@monitoringCspOptions"
-            OnCspHeaderGenerated="SetupCspMonitoring" />
+<BlazorFrame Src="@widgetUrl" />
 
 @code {
     private readonly CspOptions monitoringCspOptions = new CspOptions()
@@ -425,18 +422,6 @@ public class CspViolationReport
         .WithReportUri("/api/csp/violation")
         .AsReportOnly();  // Start with report-only for monitoring
     
-    private async Task SetupCspMonitoring(CspHeader cspHeader)
-    {
-        // Apply CSP header
-        HttpContext.Response.Headers.Add(cspHeader.HeaderName, cspHeader.HeaderValue);
-        
-        // Setup client-side violation monitoring
-        await JSRuntime.InvokeVoidAsync("setupCspMonitoring", new
-        {
-            reportUri = "/api/csp/violation",
-            enableRealTimeAlerts = true
-        });
-    }
 }
 ```
 
@@ -589,9 +574,7 @@ public class TenantCspProvider
         <h3>Test Iframe</h3>
         @if (!string.IsNullOrEmpty(testUrl))
         {
-            <BlazorFrame Src="@testUrl"
-                        CspOptions="@testCspOptions"
-                        OnCspHeaderGenerated="HandleTestCspGenerated" />
+<BlazorFrame Src="@testUrl" />
         }
     </div>
 </div>

@@ -13,6 +13,7 @@ public static class MessageSecurityExtensions
     public static MessageSecurityOptions WithBasicSandbox(this MessageSecurityOptions options)
     {
         options.SandboxPreset = SandboxPreset.Basic;
+        options.EnableSandbox = true;
         return options;
     }
 
@@ -24,6 +25,7 @@ public static class MessageSecurityExtensions
     public static MessageSecurityOptions WithPermissiveSandbox(this MessageSecurityOptions options)
     {
         options.SandboxPreset = SandboxPreset.Permissive;
+        options.EnableSandbox = true;
         return options;
     }
 
@@ -35,6 +37,7 @@ public static class MessageSecurityExtensions
     public static MessageSecurityOptions WithStrictSandbox(this MessageSecurityOptions options)
     {
         options.SandboxPreset = SandboxPreset.Strict;
+        options.EnableSandbox = true;
         return options;
     }
 
@@ -46,6 +49,7 @@ public static class MessageSecurityExtensions
     public static MessageSecurityOptions WithParanoidSandbox(this MessageSecurityOptions options)
     {
         options.SandboxPreset = SandboxPreset.Paranoid;
+        options.EnableSandbox = true;
         return options;
     }
 
@@ -58,6 +62,7 @@ public static class MessageSecurityExtensions
     public static MessageSecurityOptions WithCustomSandbox(this MessageSecurityOptions options, string sandbox)
     {
         options.Sandbox = sandbox;
+        options.EnableSandbox = true;
         return options;
     }
 
@@ -118,7 +123,8 @@ public static class MessageSecurityExtensions
         options.SandboxPreset = SandboxPreset.Strict;
         options.EnableSandbox = true; // Always enable sandbox in production
         options.MaxMessageSize = 32 * 1024; // 32KB for production
-        options.AllowScriptProtocols = false;
+        options.AllowDataUrls = false;
+        options.AllowBlobUrls = true;
         return options;
     }
 

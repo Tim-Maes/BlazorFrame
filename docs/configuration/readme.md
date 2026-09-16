@@ -92,7 +92,6 @@ public static MessageSecurityOptions GetHighSecurityConfig()
 ```razor
 <BlazorFrame Src="@widgetUrl"
             SecurityOptions="@widgetSecurity"
-            CspOptions="@widgetCsp"
             OnValidatedMessage="HandleWidgetMessage"
             OnSecurityViolation="LogSecurityViolation" />
 
@@ -108,10 +107,6 @@ public static MessageSecurityOptions GetHighSecurityConfig()
         LogSecurityViolations = true
     };
     
-    private readonly CspOptions widgetCsp = new CspOptions()
-        .ForProduction()
-        .AllowFrameSources("https://widget.example.com")
-        .WithScriptNonce("widget-nonce-123");
 }
 ```
 
@@ -253,7 +248,6 @@ if (!validation.IsValid)
 |-----------|------|---------|-------------|
 | `SecurityOptions` | `MessageSecurityOptions` | Default instance | Security configuration |
 | `AllowedOrigins` | `List<string>` | `null` | Explicit allowed message origins |
-| `CspOptions` | `CspOptions` | `null` | Content Security Policy configuration |
 
 ### Event Parameters
 | Parameter | Type | Description |
@@ -261,7 +255,6 @@ if (!validation.IsValid)
 | `OnValidatedMessage` | `EventCallback<IframeMessage>` | Secure message received |
 | `OnSecurityViolation` | `EventCallback<IframeMessage>` | Security policy violation |
 | `OnLoad` | `EventCallback` | Iframe finished loading |
-| `OnCspHeaderGenerated` | `EventCallback<CspHeader>` | CSP header created |
 
 ---
 
@@ -291,24 +284,8 @@ if (!validation.IsValid)
 // Before: No CSP
 <BlazorFrame Src="@iframeUrl" SecurityOptions="@securityOptions" />
 
-// After: With CSP
-<BlazorFrame Src="@iframeUrl" 
-            SecurityOptions="@securityOptions"
-            CspOptions="@cspOptions"
-            OnCspHeaderGenerated="ApplyCspHeader" />
-
-@code {
-    private readonly CspOptions cspOptions = new CspOptions()
-        .ForProduction()
-        .AllowFrameSources(iframeUrl);
-        
-    private Task ApplyCspHeader(CspHeader header)
-    {
-        // Apply CSP header to HTTP response
-        HttpContext.Response.Headers.Add(header.HeaderName, header.HeaderValue);
-        return Task.CompletedTask;
-    }
-}
+// After: apply the policy from the host before rendering starts.
+// ASP.NET Core: HttpContext.Response.ApplyBlazorFrameCsp(cspOptions, new[] { iframeUrl });
 ```
 
 ---

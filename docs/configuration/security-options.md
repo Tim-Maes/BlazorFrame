@@ -72,7 +72,7 @@ var devHttpsOptions = new MessageSecurityOptions
 var protocolOptions = new MessageSecurityOptions
 {
     AllowedProtocols = new List<string> { "https", "data" },
-    AllowScriptProtocols = false,           // Block javascript: URLs
+    AllowDataUrls = false,                  // Opaque-origin data URLs disabled
     AllowDataUrls = true,                   // Allow data: URLs
     AllowBlobUrls = false                   // Block blob: URLs for security
 };

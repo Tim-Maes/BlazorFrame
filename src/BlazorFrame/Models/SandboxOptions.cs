@@ -23,8 +23,8 @@ public enum SandboxPreset
     Permissive,
 
     /// <summary>
-    /// Strict sandbox: allow-scripts allow-same-origin allow-top-navigation-by-user-activation
-    /// Suitable for display-only content with limited interaction and user-initiated navigation
+    /// Strict sandbox: allow-scripts only
+    /// Suitable for display-only content that must not retain its normal origin.
     /// </summary>
     Strict,
 
@@ -52,7 +52,7 @@ public static class SandboxHelper
             SandboxPreset.None => null,
             SandboxPreset.Basic => "allow-scripts allow-same-origin",
             SandboxPreset.Permissive => "allow-scripts allow-same-origin allow-forms allow-popups",
-            SandboxPreset.Strict => "allow-scripts allow-same-origin allow-top-navigation-by-user-activation",
+            SandboxPreset.Strict => "allow-scripts",
             SandboxPreset.Paranoid => "allow-scripts",
             _ => null
         };

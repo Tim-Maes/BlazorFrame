@@ -52,7 +52,9 @@ jobs:
           retention-days: 7
 
       - name: Validate package can be created
-        run: dotnet pack src/BlazorFrame/BlazorFrame.csproj --configuration Release --no-build --output ./temp-packages
+        run: |
+          dotnet pack src/BlazorFrame/BlazorFrame.csproj --configuration Release --no-build --output ./temp-packages
+          dotnet pack src/BlazorFrame.AspNetCore/BlazorFrame.AspNetCore.csproj --configuration Release --no-build --output ./temp-packages
 
       - name: Cleanup temp packages
         run: Remove-Item -Path ./temp-packages -Recurse -Force

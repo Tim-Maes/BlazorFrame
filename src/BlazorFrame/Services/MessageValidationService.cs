@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using System.Net;
 
 namespace BlazorFrame.Services;
 
@@ -8,9 +8,6 @@ namespace BlazorFrame.Services;
 /// </summary>
 internal class MessageValidationService
 {
-    private static readonly Regex JsonCommentRegex = new(@"\/\*[\s\S]*?\*\/|\/\/.*", RegexOptions.Compiled);
-    private const int DefaultMaxDepth = 10;
-
     /// <summary>
     /// Validates an iframe message against security rules
     /// </summary>
@@ -35,18 +32,15 @@ internal class MessageValidationService
             return CreateInvalidMessage(origin, messageJson, "Message data is null or empty");
         }
 
-        if (messageJson.Length > options.MaxMessageSize)
+        var messageSize = System.Text.Encoding.UTF8.GetByteCount(messageJson);
+        if (messageSize > options.MaxMessageSize)
         {
             return CreateInvalidMessage(origin, messageJson, 
-                $"Message size ({messageJson.Length} bytes) exceeds maximum allowed size ({options.MaxMessageSize} bytes)");
+                $"Message size ({messageSize} bytes) exceeds maximum allowed size ({options.MaxMessageSize} bytes)");
         }
 
-        if (ContainsSuspiciousContent(messageJson))
-        {
-            return CreateInvalidMessage(origin, messageJson, "Message contains potentially malicious content");
-        }
-
-        if (!IsOriginAllowed(origin, allowedOrigins))
+        var normalizedOrigin = NormalizeOrigin(origin) ?? (origin.Equals("null", StringComparison.OrdinalIgnoreCase) ? "null" : null);
+        if (normalizedOrigin is null || !IsOriginAllowed(normalizedOrigin, allowedOrigins))
         {
             return CreateInvalidMessage(origin, messageJson, 
                 $"Origin '{origin}' is not in the allowed origins list");
@@ -68,7 +62,7 @@ internal class MessageValidationService
         {
             try
             {
-                if (!options.CustomValidator(origin, messageJson))
+                if (!options.CustomValidator(normalizedOrigin, messageJson))
                 {
                     return CreateInvalidMessage(origin, messageJson, "Custom validation failed");
                 }
@@ -81,7 +75,7 @@ internal class MessageValidationService
 
         return new IframeMessage
         {
-            Origin = origin,
+            Origin = normalizedOrigin,
             Data = messageJson,
             IsValid = true,
             ValidationError = null,
@@ -101,32 +95,17 @@ internal class MessageValidationService
 
         try
         {
-            if (url.StartsWith("/"))
-                return null;
-
-            if (url.StartsWith("data:"))
-                return "data:";
-
-            if (url.StartsWith("blob:"))
-                return "blob:";
+            if (url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+            {
+                var blobUrl = url[5..];
+                return ExtractOrigin(blobUrl);
+            }
 
             var uri = new Uri(url);
-            
-            // Validate URI scheme
-            if (!IsValidScheme(uri.Scheme))
+            if (!IsHttpScheme(uri.Scheme) || !string.IsNullOrEmpty(uri.UserInfo))
                 return null;
 
-            // Build origin manually to preserve explicit ports (even default ones)
-            var origin = $"{uri.Scheme}://{uri.Host}";
-            
-            // Always include port if it was explicitly specified in the URL
-            // This preserves explicit default ports (443 for HTTPS, 80 for HTTP)
-            if (!uri.IsDefaultPort || url.Contains($":{uri.Port}"))
-            {
-                origin += $":{uri.Port}";
-            }
-                
-            return origin;
+            return NormalizeOrigin(uri);
         }
         catch
         {
@@ -147,46 +126,42 @@ internal class MessageValidationService
 
         try
         {
-            // Handle relative URLs - they inherit the parent page's protocol
-            if (url.StartsWith("/"))
+            if (IsRelativeUrl(url))
             {
-                if (options.RequireHttps && !options.AllowInsecureConnections)
-                {
-                    // Note: We can't validate relative URLs without knowing the parent page protocol
-                    // This is a limitation that should be documented
-                    return (true, null); // Allow relative URLs but log a warning
-                }
+                if (url.StartsWith("//", StringComparison.Ordinal) && options.RequireHttps && !options.AllowInsecureConnections)
+                    return (false, "Protocol-relative URLs cannot be verified as HTTPS. Use an explicit https:// URL.");
+
                 return (true, null);
             }
 
-            // Handle special schemes - these bypass normal HTTP/HTTPS validation
-            if (url.StartsWith("data:"))
+            if (url.Equals("about:blank", StringComparison.OrdinalIgnoreCase))
+                return (true, null);
+
+            if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
             {
-                // Data URLs are considered safe as they don't make network requests
+                return options.AllowDataUrls
+                    ? (true, null)
+                    : (false, "Data URLs are disabled. Set AllowDataUrls=true only for trusted, non-communicating content.");
+            }
+
+            if (url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!options.AllowBlobUrls)
+                    return (false, "Blob URLs are disabled. Set AllowBlobUrls=true to allow browser-generated content.");
+
+                var blobOrigin = ExtractOrigin(url);
+                if (blobOrigin is null)
+                    return (false, "The blob URL must contain an http or https origin.");
+
+                if (options.RequireHttps && blobOrigin.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !options.AllowInsecureConnections)
+                    return (false, "HTTPS is required but the blob URL belongs to an HTTP origin.");
+
                 return (true, null);
             }
 
-            if (url.StartsWith("blob:"))
-            {
-                // Blob URLs are browser-generated and considered safe
-                return (true, null);
-            }
-
-            var uri = new Uri(url);
-
-            // Check script protocols first (more specific check)
-            var scriptProtocols = new[] { "javascript", "vbscript", "livescript" };
-            if (scriptProtocols.Contains(uri.Scheme.ToLowerInvariant()))
-            {
-                if (!options.AllowScriptProtocols)
-                    return (false, $"Script protocol '{uri.Scheme}' is not allowed. Enable AllowScriptProtocols if this is intended.");
-                else
-                    return (true, null); // Script protocols are explicitly allowed
-            }
-
-            // Validate scheme is allowed (after script protocol check)
-            if (!IsValidScheme(uri.Scheme))
-                return (false, $"URL scheme '{uri.Scheme}' is not allowed. Allowed schemes: http, https, data, blob");
+            var uri = new Uri(url, UriKind.Absolute);
+            if (!IsHttpScheme(uri.Scheme) || !string.IsNullOrEmpty(uri.UserInfo))
+                return (false, $"URL scheme '{uri.Scheme}' is not allowed. Allowed schemes: http, https, relative URLs, about:blank, and configured blob/data URLs.");
 
             // Check HTTPS requirement for HTTP URLs
             if (uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase))
@@ -213,12 +188,16 @@ internal class MessageValidationService
         }
     }
 
-    private static bool IsOriginAllowed(string origin, IReadOnlyList<string> allowedOrigins)
+    private bool IsOriginAllowed(string origin, IReadOnlyList<string> allowedOrigins)
     {
         if (allowedOrigins.Count == 0)
             return false;
 
-        return allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
+        return allowedOrigins.Any(allowed =>
+            string.Equals(allowed, "null", StringComparison.OrdinalIgnoreCase)
+                ? origin == "null"
+                : NormalizeOrigin(allowed) is { } normalized &&
+                  string.Equals(normalized, origin, StringComparison.Ordinal));
     }
 
     private static (bool IsValid, string? Error, string? MessageType) ValidateJsonStructure(string messageJson, MessageSecurityOptions options)
@@ -242,6 +221,9 @@ internal class MessageValidationService
             string? messageType = null;
             if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("type", out var typeElement))
             {
+                if (typeElement.ValueKind != JsonValueKind.String)
+                    return (false, "Message type must be a string", null);
+
                 messageType = typeElement.GetString();
                 
                 if (!string.IsNullOrEmpty(messageType) && !IsValidMessageType(messageType))
@@ -295,38 +277,54 @@ internal class MessageValidationService
         return true;
     }
 
-    private static bool ContainsSuspiciousContent(string messageJson)
+    private static bool IsRelativeUrl(string url)
     {
-        var cleanJson = JsonCommentRegex.Replace(messageJson, "");
-        
-        // HTML injection patterns - these are dangerous in any context
-        var htmlPatterns = new[]
-        {
-            "<script",
-            "javascript:",
-            "vbscript:",
-        };
+        if (string.IsNullOrWhiteSpace(url) || url.Any(char.IsControl) || url.Any(char.IsWhiteSpace))
+            return false;
 
-        // HTML event handler patterns - look for attribute-style injection
-        var eventHandlerPatterns = new[]
-        {
-            "onload=",
-            "onerror=",
-            "onclick=",
-            "onmouseover=",
-            "onfocus=",
-        };
-
-        return htmlPatterns.Any(pattern => 
-            cleanJson.Contains(pattern, StringComparison.OrdinalIgnoreCase))
-            || eventHandlerPatterns.Any(pattern =>
-            cleanJson.Contains(pattern, StringComparison.OrdinalIgnoreCase));
+        return url.StartsWith("/", StringComparison.Ordinal)
+            || url.StartsWith("./", StringComparison.Ordinal)
+            || url.StartsWith("../", StringComparison.Ordinal)
+            || url.StartsWith("?", StringComparison.Ordinal)
+            || url.StartsWith("#", StringComparison.Ordinal)
+            || url.StartsWith("//", StringComparison.Ordinal);
     }
 
-    private static bool IsValidScheme(string scheme)
+    private static bool IsHttpScheme(string scheme)
     {
-        var validSchemes = new[] { "http", "https", "data", "blob" };
-        return validSchemes.Contains(scheme.ToLowerInvariant());
+        return scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+            || scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public string? NormalizeOrigin(string? origin)
+    {
+        if (string.IsNullOrWhiteSpace(origin))
+            return null;
+
+        if (origin.Equals("null", StringComparison.OrdinalIgnoreCase))
+            return "null";
+
+        return Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+            ? NormalizeOrigin(uri)
+            : null;
+    }
+
+    private static string? NormalizeOrigin(Uri uri)
+    {
+        if (!IsHttpScheme(uri.Scheme) || !string.IsNullOrEmpty(uri.UserInfo))
+            return null;
+
+        var host = uri.Host;
+        if (IPAddress.TryParse(host, out var address) && address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            host = $"[{host}]";
+        else
+            host = uri.IdnHost.ToLowerInvariant();
+
+        var origin = $"{uri.Scheme.ToLowerInvariant()}://{host}";
+        if (!uri.IsDefaultPort)
+            origin += $":{uri.Port}";
+
+        return origin;
     }
 
     private static bool IsValidMessageType(string messageType)

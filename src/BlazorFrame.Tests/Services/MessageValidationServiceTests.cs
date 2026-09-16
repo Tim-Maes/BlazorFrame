@@ -121,7 +121,7 @@ public class MessageValidationServiceTests
     }
 
     [Fact]
-    public void ValidateMessage_WithSuspiciousContent_ReturnsInvalidMessage()
+    public void ValidateMessage_WithMarkupLikePayload_IsValidatedBySchemaNotSubstringScan()
     {
         // Arrange
         var origin = "https://example.com";
@@ -133,8 +133,7 @@ public class MessageValidationServiceTests
         var result = _validationService.ValidateMessage(origin, messageJson, allowedOrigins, options);
 
         // Assert
-        result.IsValid.Should().BeFalse();
-        result.ValidationError.Should().Be("Message contains potentially malicious content");
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
@@ -294,7 +293,7 @@ public class MessageValidationServiceTests
     [InlineData("vbscript:MsgBox('xss')")]
     [InlineData("onload=alert('xss')")]
     [InlineData("onerror=alert('xss')")]
-    public void ValidateMessage_WithSuspiciousPatterns_ReturnsInvalidMessage(string suspiciousContent)
+    public void ValidateMessage_WithMarkupLikePatterns_IsNotRejectedBySubstringScan(string suspiciousContent)
     {
         // Arrange
         var origin = "https://example.com";
@@ -306,8 +305,7 @@ public class MessageValidationServiceTests
         var result = _validationService.ValidateMessage(origin, messageJson, allowedOrigins, options);
 
         // Assert
-        result.IsValid.Should().BeFalse();
-        result.ValidationError.Should().Be("Message contains potentially malicious content");
+        result.IsValid.Should().BeTrue();
     }
 
     #endregion
@@ -321,7 +319,7 @@ public class MessageValidationServiceTests
     [InlineData("http://localhost:3000", "http://localhost:3000")]
     [InlineData("https://example.com/path/to/page", "https://example.com")]
     [InlineData("https://example.com/path?query=value", "https://example.com")]
-    [InlineData("https://example.com:443/secure/path", "https://example.com:443")]
+    [InlineData("https://example.com:443/secure/path", "https://example.com")]
     public void ExtractOrigin_WithValidUrl_ReturnsCorrectOrigin(string url, string expectedOrigin)
     {
         // Arrange
@@ -332,17 +330,18 @@ public class MessageValidationServiceTests
         result.Should().Be(expectedOrigin);
     }
 
-    [Theory]
-    [InlineData("data:text/html,<html></html>", "data:")]
-    [InlineData("blob:https://example.com/uuid", "blob:")]
-    public void ExtractOrigin_WithSpecialSchemes_ReturnsSchemePrefix(string url, string expectedOrigin)
+    [Fact]
+    public void ExtractOrigin_WithBlobUrl_ReturnsCreatorOrigin()
     {
-        // Arrange
-        // Act
-        var result = _validationService.ExtractOrigin(url);
+        var result = _validationService.ExtractOrigin("blob:https://example.com/uuid");
 
-        // Assert
-        result.Should().Be(expectedOrigin);
+        result.Should().Be("https://example.com");
+    }
+
+    [Fact]
+    public void ExtractOrigin_WithDataUrl_ReturnsNullForOpaqueOrigin()
+    {
+        _validationService.ExtractOrigin("data:text/html,<html></html>").Should().BeNull();
     }
 
     [Theory]
@@ -370,7 +369,6 @@ public class MessageValidationServiceTests
     [InlineData("https://example.com")]
     [InlineData("https://subdomain.example.com:8080")]
     [InlineData("http://localhost:3000")]
-    [InlineData("data:text/html,<html></html>")]
     [InlineData("blob:https://example.com/uuid")]
     public void ValidateUrl_WithValidUrl_ReturnsValid(string url)
     {
@@ -383,6 +381,23 @@ public class MessageValidationServiceTests
         // Assert
         isValid.Should().BeTrue();
         errorMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public void ValidateUrl_WithDataUrl_IsRejectedByDefault()
+    {
+        var result = _validationService.ValidateUrl("data:text/html,<html></html>", new MessageSecurityOptions());
+
+        result.IsValid.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Data URLs are disabled");
+    }
+
+    [Fact]
+    public void ValidateUrl_WithDataUrlAndExplicitOptIn_IsValid()
+    {
+        var result = _validationService.ValidateUrl("data:text/html,<html></html>", new MessageSecurityOptions { AllowDataUrls = true });
+
+        result.IsValid.Should().BeTrue();
     }
 
     [Theory]
@@ -461,31 +476,31 @@ public class MessageValidationServiceTests
     public void ValidateUrl_WithScriptProtocolsDisallowed_ReturnsInvalid(string url)
     {
         // Arrange
-        var options = new MessageSecurityOptions { AllowScriptProtocols = false };
+        var options = new MessageSecurityOptions();
 
         // Act
         var (isValid, errorMessage) = _validationService.ValidateUrl(url, options);
 
         // Assert
         isValid.Should().BeFalse();
-        errorMessage.Should().Contain("is not allowed. Enable AllowScriptProtocols");
+        errorMessage.Should().Contain("is not allowed");
     }
 
     [Theory]
     [InlineData("javascript:alert('xss')")]
     [InlineData("vbscript:MsgBox('hello')")]
     [InlineData("livescript:doSomething()")]
-    public void ValidateUrl_WithScriptProtocolsAllowed_ReturnsValid(string url)
+    public void ValidateUrl_WithScriptProtocolsRemainInvalid(string url)
     {
         // Arrange
-        var options = new MessageSecurityOptions { AllowScriptProtocols = true };
+        var options = new MessageSecurityOptions();
 
         // Act
         var (isValid, errorMessage) = _validationService.ValidateUrl(url, options);
 
         // Assert
-        isValid.Should().BeTrue();
-        errorMessage.Should().BeNull();
+        isValid.Should().BeFalse();
+        errorMessage.Should().Contain("is not allowed");
     }
 
     [Theory]
@@ -502,7 +517,7 @@ public class MessageValidationServiceTests
 
         // Assert
         isValid.Should().BeFalse();
-        errorMessage.Should().Contain("is not allowed. Allowed schemes: http, https, data, blob");
+        errorMessage.Should().Contain("is not allowed");
     }
 
     [Fact]

@@ -305,7 +305,6 @@ Common issues, solutions, and debugging techniques for BlazorFrame. This guide c
 ```razor
 <!-- Problem: Restrictive CSP -->
 <BlazorFrame Src="https://widget.example.com"
-            CspOptions="@restrictiveCsp" />
 
 @code {
     private readonly CspOptions restrictiveCsp = new CspOptions()
@@ -314,7 +313,6 @@ Common issues, solutions, and debugging techniques for BlazorFrame. This guide c
 
 <!-- Solution: Add frame sources -->
 <BlazorFrame Src="https://widget.example.com"
-            CspOptions="@permissiveCsp" />
 
 @code {
     private readonly CspOptions permissiveCsp = new CspOptions()

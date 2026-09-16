@@ -266,22 +266,14 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
 }
 ```
 
-### CspOptions
-**Type:** `CspOptions?`  
-**Default:** `null` (no CSP generation)  
-**Description:** Content Security Policy configuration options.
+### CSP Integration
+The component does not expose a CSP callback or apply response headers during rendering.
+Configure CSP in the host application. ASP.NET Core applications can install
+`BlazorFrame.AspNetCore` and call `HttpResponse.ApplyBlazorFrameCsp` before the response starts.
 
 ```razor
 <!-- No CSP (default) -->
 <BlazorFrame Src="https://example.com" />
-
-<!-- Basic CSP configuration -->
-<BlazorFrame Src="https://example.com"
-            CspOptions="@basicCsp" />
-
-<!-- Advanced CSP with custom directives -->
-<BlazorFrame Src="https://example.com"
-            CspOptions="@advancedCsp" />
 
 @code {
     private readonly CspOptions basicCsp = new CspOptions()
@@ -391,32 +383,6 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
         Logger.LogError(ex, "BlazorFrame initialization failed");
         // Show user-friendly error message
         ShowErrorMessage("Failed to load content. Please try again.");
-        return Task.CompletedTask;
-    }
-}
-```
-
-### OnCspHeaderGenerated
-**Type:** `EventCallback<CspHeader>`  
-**Description:** Fired when CSP header is generated.
-
-```razor
-<BlazorFrame Src="https://example.com" 
-            CspOptions="@cspOptions"
-            OnCspHeaderGenerated="HandleCspGenerated" />
-
-@code {
-    private Task HandleCspGenerated(CspHeader cspHeader)
-    {
-        // Apply CSP header to HTTP response
-        if (HttpContext?.Response != null)
-        {
-            HttpContext.Response.Headers.Add(
-                cspHeader.HeaderName, 
-                cspHeader.HeaderValue);
-        }
-        
-        Logger.LogDebug("CSP Header: {Header}", cspHeader.HeaderValue);
         return Task.CompletedTask;
     }
 }
@@ -714,10 +680,8 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
             EnableAutoResize="false"
             AllowedOrigins="@trustedOrigins"
             SecurityOptions="@maxSecurityOptions"
-            CspOptions="@strictCspOptions"
             OnValidatedMessage="LogSecureMessage"
             OnSecurityViolation="HandleSecurityBreach"
-            OnCspHeaderGenerated="ApplyCspHeader"
             class="secure-iframe" />
 
 @code {
@@ -732,10 +696,6 @@ Complete reference for all BlazorFrame component parameters, their types, defaul
         new MessageSecurityOptions()
             .ForPaymentWidget();  // Maximum security preset
     
-    private readonly CspOptions strictCspOptions = new CspOptions()
-        .ForProduction()
-        .AllowFrameSources("https://secure-widget.example.com")
-        .WithScriptNonce("secure-nonce-456");
 }
 ```
 

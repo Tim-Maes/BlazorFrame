@@ -66,7 +66,11 @@ dotnet add package BlazorFrame
             SecurityOptions="@securityOptions"
             OnValidatedMessage="HandleMessage"
             OnNavigation="HandleNavigation"
-            OnSecurityViolation="HandleViolation" />
+            OnSecurityViolation="HandleViolation"
+            Title="Example widget"
+            Loading="lazy"
+            ReferrerPolicy="strict-origin-when-cross-origin"
+            Allow="fullscreen" />
 
 <button @onclick="SendDataToIframe">Send Data</button>
 
@@ -199,9 +203,13 @@ Refresh iframe content without recreating the entire component - useful for PDFs
 ### Content Security Policy
 
 ```razor
-<BlazorFrame Src="https://widget.example.com"
-            CspOptions="@cspOptions"
-            OnCspHeaderGenerated="HandleCspGenerated" />
+// In an ASP.NET Core host, install the optional integration package:
+// dotnet add package BlazorFrame.AspNetCore
+
+// Apply this before the response starts, for example in middleware or an endpoint.
+HttpContext.Response.ApplyBlazorFrameCsp(
+    cspOptions,
+    new[] { "https://widget.example.com" });
 
 @code {
     private readonly CspOptions cspOptions = new CspOptions()
@@ -209,14 +217,39 @@ Refresh iframe content without recreating the entire component - useful for PDFs
         .AllowFrameSources("https://widget.example.com")
         .WithScriptNonce("secure-nonce-123");
         
-    private Task HandleCspGenerated(CspHeader cspHeader)
-    {
-        // Apply CSP header to HTTP response
-        // HttpContext.Response.Headers.Add(cspHeader.HeaderName, cspHeader.HeaderValue);
-        return Task.CompletedTask;
-    }
 }
 ```
+
+The component does not mutate HTTP response headers after rendering. For WebAssembly or
+other hosts, configure the host page/server response directly.
+
+### Capability Handshake
+
+Origin validation is enabled by default. Applications that need an additional shared-secret
+check can opt into a challenge/acknowledgement handshake:
+
+```csharp
+private readonly MessageSecurityOptions securityOptions = new()
+{
+    CapabilityToken = "replace-with-a-random-secret-at-least-16-chars"
+};
+```
+
+The iframe must answer each challenge with a message from the expected origin:
+
+```javascript
+window.addEventListener("message", event => {
+  if (event.data?.type !== "blazorframe.handshake.challenge") return;
+
+  event.source.postMessage({
+    type: "blazorframe.handshake.ack",
+    challenge: event.data.challenge,
+    token: "replace-with-a-random-secret-at-least-16-chars"
+  }, event.origin);
+});
+```
+
+Normal messages are not delivered until the acknowledgement succeeds.
 
 ## Security
 
@@ -262,7 +295,11 @@ All iframe messages are automatically validated for:
 | `EnableNavigationTracking` | `bool` | `false` | Track iframe navigation events |
 | `AllowedOrigins` | `List<string>?` | `null` | Allowed origins for postMessage |
 | `SecurityOptions` | `MessageSecurityOptions` | `new()` | Security configuration |
-| `CspOptions` | `CspOptions?` | `null` | Content Security Policy configuration |
+| `Title` | `string?` | `null` | Accessible iframe title |
+| `Loading` | `string` | `"eager"` | Native browser loading mode (`eager` or `lazy`) |
+| `ReferrerPolicy` | `string?` | `null` | Iframe referrer policy |
+| `Allow` | `string?` | `null` | Iframe permissions policy |
+| `Credentialless` | `bool` | `false` | Use an ephemeral credentialless iframe context where supported |
 
 ### Component Methods
 
@@ -272,8 +309,6 @@ All iframe messages are automatically validated for:
 | `ReloadAsync(string newSrc)` | `Task` | Reloads with a new source URL |
 | `SendMessageAsync(object data, string? targetOrigin)` | `Task<bool>` | Sends a message to the iframe |
 | `SendTypedMessageAsync(string type, object? data, string? targetOrigin)` | `Task<bool>` | Sends a typed message |
-| `GetRecommendedCspHeader()` | `CspHeader?` | Gets the recommended CSP header |
-| `ValidateCspConfiguration()` | `CspValidationResult?` | Validates the CSP configuration |
 
 ### Events
 
@@ -287,7 +322,6 @@ All iframe messages are automatically validated for:
 | `OnUrlChanged` | `EventCallback<string>` | Fired on URL change |
 | `OnMessageSent` | `EventCallback<string>` | Fired when message sent |
 | `OnMessageSendFailed` | `EventCallback<Exception>` | Fired on send failure |
-| `OnCspHeaderGenerated` | `EventCallback<CspHeader>` | Fired when CSP generated |
 | `OnInitializationError` | `EventCallback<Exception>` | Fired on init failure |
 
 ## Demo

@@ -36,9 +36,27 @@ public class MessageSecurityOptions
     public int MaxArrayElements { get; set; } = 1000;
 
     /// <summary>
-    /// Whether to allow JavaScript protocol URLs (javascript:, vbscript:, etc.)
+    /// Whether data URLs may be used as iframe sources.
+    /// Data URLs have an opaque origin and cannot use normal origin-based messaging.
     /// </summary>
-    public bool AllowScriptProtocols { get; set; } = false;
+    public bool AllowDataUrls { get; set; } = false;
+
+    /// <summary>
+    /// Whether blob URLs may be used as iframe sources.
+    /// Blob URLs are associated with the origin that created them.
+    /// </summary>
+    public bool AllowBlobUrls { get; set; } = true;
+
+    /// <summary>
+    /// Shared capability used to authenticate the iframe during the optional handshake.
+    /// The iframe must know this value and acknowledge the challenge before messages are accepted.
+    /// </summary>
+    public string? CapabilityToken { get; set; }
+
+    /// <summary>
+    /// Maximum time to wait for the optional capability handshake.
+    /// </summary>
+    public int HandshakeTimeoutMs { get; set; } = 5000;
 
     /// <summary>
     /// Custom validation function for additional security checks
@@ -79,34 +97,22 @@ public class MessageSecurityOptions
     public bool AllowInsecureConnections { get; set; } = false;
 
     /// <summary>
-    /// Gets the effective sandbox value based on configuration priority:
-    /// 1. If EnableSandbox is false, returns null (no sandbox)
-    /// 2. Explicit Sandbox property (if not null or empty)
-    /// 3. SandboxPreset (if not None)
-    /// 4. EnableSandbox with Basic preset
-    /// 5. null (no sandbox)
+    /// Gets the effective sandbox value. EnableSandbox is the master switch;
+    /// when enabled without another setting, the Basic preset is used.
     /// </summary>
     /// <returns>The sandbox attribute value to use, or null if no sandbox should be applied</returns>
     public string? GetEffectiveSandboxValue()
     {
-        // Priority 1: If sandbox is explicitly disabled, return null
-        if (!EnableSandbox && string.IsNullOrEmpty(Sandbox) && SandboxPreset == SandboxPreset.None)
+        if (!EnableSandbox)
             return null;
 
-        // Priority 2: Explicit sandbox value (if not null or empty)
-        if (!string.IsNullOrEmpty(Sandbox))
+        if (Sandbox is not null)
             return Sandbox;
 
-        // Priority 3: Sandbox preset (if not None)
         if (SandboxPreset != SandboxPreset.None)
             return SandboxHelper.GetSandboxValue(SandboxPreset);
 
-        // Priority 4: EnableSandbox with basic preset
-        if (EnableSandbox)
-            return SandboxHelper.GetSandboxValue(SandboxPreset.Basic);
-
-        // Priority 5: No sandbox
-        return null;
+        return SandboxHelper.GetSandboxValue(SandboxPreset.Basic);
     }
 
     /// <summary>
@@ -129,8 +135,8 @@ public class MessageSecurityOptions
         // Check for sandbox configuration conflicts
         if (!EnableSandbox && !string.IsNullOrEmpty(Sandbox))
         {
-            warnings.Add("EnableSandbox is false but Sandbox property is set. The sandbox attribute will still be applied.");
-            suggestions.Add("Set EnableSandbox=true if you want to use the Sandbox property, or clear the Sandbox property to disable sandboxing.");
+            warnings.Add("EnableSandbox is false but Sandbox property is set. The sandbox configuration will be ignored.");
+            suggestions.Add("Set EnableSandbox=true if you want to use the Sandbox property, or clear the Sandbox property.");
         }
 
         if (!EnableSandbox && SandboxPreset != SandboxPreset.None)
@@ -169,11 +175,14 @@ public class MessageSecurityOptions
             errors.Add("MaxArrayElements must be greater than 0.");
         }
 
-        // Check for potentially insecure configurations
-        if (AllowScriptProtocols)
+        if (!string.IsNullOrEmpty(CapabilityToken) && CapabilityToken.Length < 16)
         {
-            warnings.Add("AllowScriptProtocols=true allows javascript: and vbscript: URLs, which can be dangerous.");
-            suggestions.Add("Only enable AllowScriptProtocols if absolutely necessary and you trust the content source.");
+            errors.Add("CapabilityToken must contain at least 16 characters.");
+        }
+
+        if (HandshakeTimeoutMs <= 0)
+        {
+            errors.Add("HandshakeTimeoutMs must be greater than 0.");
         }
 
         if (!EnableStrictValidation)

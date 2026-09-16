@@ -1,60 +1,102 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: CD
+name: Release
+run-name: '[Release] ${{ github.event.release.tag_name }}'
+
 on:
   release:
-    types:
-      - published
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
 
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_NOLOGO: true
-  NuGetDirectory: ${{ github.workspace }}/nuget
-
-defaults:
-  run:
-    shell: pwsh
 
 jobs:
-  publish-nuget:
+  release:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Extract version from release tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+
+          if [ -z "$VERSION" ]; then
+            echo "Error: VERSION is empty! GITHUB_REF_NAME was: $GITHUB_REF_NAME"
+            echo "Please create the release with a proper tag like 'v3.0.0'"
+            exit 1
+          fi
+
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Extracted version: $VERSION"
+
+      - name: Update package versions
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          sed -i -E "s|<Version>[^<]*</Version>|<Version>${VERSION}</Version>|g" \
+            src/BlazorFrame/BlazorFrame.csproj \
+            src/BlazorFrame.AspNetCore/BlazorFrame.AspNetCore.csproj
+
+          echo "Updated package projects to version ${VERSION}"
 
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build Solution
+      - name: Build
         run: dotnet build --configuration Release --no-restore
 
-      - name: Test
+      - name: Run Unit Tests
         run: dotnet test --configuration Release --no-build --verbosity normal
 
-      - name: Pack NuGet Package
-        run: dotnet pack src/BlazorFrame/BlazorFrame.csproj --configuration Release --output ${{ env.NuGetDirectory }} --no-build
+      - name: Pack NuGet packages
+        run: dotnet pack --configuration Release --no-build --include-symbols -p:SymbolPackageFormat=snupkg --output ./artifacts
 
-      - uses: actions/upload-artifact@v4
+      - name: List generated packages
+        run: ls -la ./artifacts/
+
+      - name: NuGet login (Trusted Publishing)
+        uses: NuGet/login@v1
+        id: nuget-login
         with:
-          name: nuget-package
-          if-no-files-found: error
-          retention-days: 30
-          path: ${{ env.NuGetDirectory }}/*.nupkg
+          user: ${{ secrets.NUGET_USER }}
 
       - name: Publish to NuGet
+        run: dotnet nuget push "./artifacts/*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Commit version update
         run: |
-          foreach ($file in Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg) {
-            if ($file.Name -like "BlazorFrame.*.nupkg") {
-              Write-Host "Publishing $($file.Name)"
-              dotnet nuget push $file `
-                --api-key "${{ secrets.NUGET_API_KEY }}" `
-                --source https://api.nuget.org/v3/index.json `
-                --skip-duplicate
-            }
-          }
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          if git symbolic-ref HEAD >/dev/null 2>&1; then
+            echo "On branch, proceeding with commit"
+          else
+            echo "Detached HEAD detected, switching to master branch"
+            git checkout -B master
+          fi
+
+          if git diff --quiet -- src/BlazorFrame/BlazorFrame.csproj src/BlazorFrame.AspNetCore/BlazorFrame.AspNetCore.csproj; then
+            echo "No changes to commit"
+          else
+            git add src/BlazorFrame/BlazorFrame.csproj src/BlazorFrame.AspNetCore/BlazorFrame.AspNetCore.csproj
+            git commit -m "Bump version to ${{ steps.get_version.outputs.VERSION }}"
+            git push origin master
+          fi

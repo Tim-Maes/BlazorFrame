@@ -134,7 +134,6 @@ Real-world examples and patterns for using BlazorFrame in common scenarios. Each
                 Width="100%"
                 EnableAutoResize="true"
                 SecurityOptions="@socialSecurityOptions"
-                CspOptions="@socialCspOptions"
                 OnValidatedMessage="HandleSocialMessage"
                 OnSecurityViolation="HandleSocialViolation"
                 class="social-feed" />
@@ -229,7 +228,6 @@ Real-world examples and patterns for using BlazorFrame in common scenarios. Each
                 EnableAutoResize="false"
                 AllowedOrigins="@paymentOrigins"
                 SecurityOptions="@paymentSecurityOptions"
-                CspOptions="@paymentCspOptions"
                 OnValidatedMessage="HandlePaymentMessage"
                 OnSecurityViolation="HandlePaymentViolation"
                 OnInitializationError="HandlePaymentError"
